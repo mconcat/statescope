@@ -85,7 +85,7 @@ def test_new_reader_is_bit_identical_to_the_frozen_standalone_reader(settings: S
 
 # ---------------------------------------------------------------------------------------------------------------- R1.3
 def _recorded_parity(settings: Settings, layer: int) -> dict:
-    """what the original release_parity.py measured for this layer (processor, RTX 5090, 2026-11-16)"""
+    """what the original release_parity.py measured for this layer (another machine, RTX 5090, 2026-11-16)"""
     path = settings.need_legacy_snapshot() / "results" / "mlp_track" / "release_parity" / "parity.json"
     return json.loads(path.read_text())[str(layer)]
 

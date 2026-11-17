@@ -36,7 +36,7 @@ same floating-point operations in the same order, so on the same device and inpu
 (`torch.equal`): gate values, MLP output estimate, selected groups, codes, reconstructions, `atom_write`, `group_write`, `capture`.
 
 **R1.3 New reader vs the legacy repository readers** (`RawAdaptive(TieredFolded.from_export)` for the MLP dictionary, `molt_vocab_align.lib.Vocab`
-for the state dictionary). Pass/fail is rule R0 (a)+(b). In addition the numbers the original measured on processor (RTX 5090) are asserted,
+for the state dictionary). Pass/fail is rule R0 (a)+(b). In addition the numbers the original measured on another machine (also an RTX 5090) are asserted,
 because the same card model is used here; if these stricter assertions fail while R0 holds, that is a rounding finding to explain, not to waive.
 
 | quantity | measured by the original | asserted |
@@ -95,7 +95,7 @@ process-to-process variation (kernel tuning of the bf16 forward); it is recorded
 **R5.2 New vs legacy.** For every quantity q: |new_q - A_q| <= max(3 x |A_q - B_q|, 1e-6). `n_positions` exact. The identity-splice KL of the
 first batch <= 1e-4 (the original's own self-check).
 
-**R5.3 New vs the recorded numbers** (measured on processor, 2026-11-16; `results/mlp_track/splice_loss/splice.json` in the snapshot): `ce_clean`
+**R5.3 New vs the recorded numbers** (measured on another machine, 2026-11-16; `results/mlp_track/splice_loss/splice.json` in the snapshot): `ce_clean`
 and every arm's `dce` and `kl` within 0.002 nat. The public table prints three decimals; the allowance is for another machine's bf16 forward,
 whose size has not been measured [prediction: below 0.001].
 
