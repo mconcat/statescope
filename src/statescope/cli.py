@@ -21,7 +21,10 @@ import os
 
 import torch
 
-from statescope.config import MIX_08B, MODELS, DataPaths
+from statescope.config import MIX_08B, MODELS, DataPaths, MixSpec
+
+# the training mixture and reserved rows of each model; a model without an entry cannot be calibrated or trained from the command line
+MIXES: dict[str, MixSpec] = {"qwen3.5-0.8b": MIX_08B}
 
 
 def _add_data_paths(parser: argparse.ArgumentParser) -> None:
@@ -33,6 +36,12 @@ def _add_data_paths(parser: argparse.ArgumentParser) -> None:
 
 def _data_paths(args: argparse.Namespace) -> DataPaths:
     return DataPaths(args.pile_dir, args.ultrachat_dir, args.view_corpus, args.full_corpus)
+
+
+def _mix(model: str) -> MixSpec:
+    if model not in MIXES:
+        raise SystemExit(f"no token mixture is defined for {model} yet (only {sorted(MIXES)}); the reader, verify, foldcheck and splice work for it")
+    return MIXES[model]
 
 
 def _cap_gpu(device: str, gb: float | None) -> None:
@@ -57,18 +66,20 @@ def cmd_verify(args: argparse.Namespace) -> None:
 def cmd_calibrate(args: argparse.Namespace) -> None:
     from statescope.lm import load_language_model
     from statescope.prep.calibrate import calibrate
+    mix = _mix(args.model)                      # before anything is loaded
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
-    print(json.dumps(calibrate(lm, args.layer, _data_paths(args), MIX_08B, args.out), indent=1))
+    print(json.dumps(calibrate(lm, args.layer, _data_paths(args), mix, args.out), indent=1))
 
 
 def cmd_fixedmap(args: argparse.Namespace) -> None:
     from statescope.data.mix import training_stream
     from statescope.lm import load_language_model
     from statescope.prep.fixedmap import fixed_map
+    mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
-    stream = training_stream(lm.tokenizer, _data_paths(args), MIX_08B)
+    stream = training_stream(lm.tokenizer, _data_paths(args), mix)
     print(json.dumps(fixed_map(lm, args.layer, stream, args.calib_dir, args.out), indent=1))
 
 
@@ -77,12 +88,13 @@ def _training_setup(args: argparse.Namespace):
     from statescope.calibration import load_calibration
     from statescope.data.mix import training_stream
     from statescope.lm import load_language_model
+    mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
     torch.manual_seed(args.seed)
     torch.set_float32_matmul_precision("highest")
     stats = load_calibration(args.calib_dir, torch.device(args.device))
     lm = load_language_model(MODELS[args.model], args.device)
-    stream = training_stream(lm.tokenizer, _data_paths(args), MIX_08B)
+    stream = training_stream(lm.tokenizer, _data_paths(args), mix)
     return stats, lm, stream
 
 
@@ -103,7 +115,7 @@ def cmd_train_molt(args: argparse.Namespace) -> None:
     from statescope.molt.recipe import MoltRecipe
     from statescope.molt.train import train_molt
     stats, lm, stream = _training_setup(args)
-    capturer = Capturer(lm, args.layer, MIX_08B.min_pos)
+    capturer = Capturer(lm, args.layer, _mix(args.model).min_pos)
     skip_map = load_file(args.fixmap)["W_skip_std"]
     recipe = dataclasses.replace(MoltRecipe(), seed=args.seed)
     final = train_molt(lm, capturer, stream, stats, args.calib_dir, skip_map, args.out, recipe, tokens=int(args.tokens),

@@ -205,7 +205,7 @@ Reader parity was also measured on 4,096 held-out Pile tokens. The MLP dictionar
 - A second training seed across all layers is not included.
 - A learning-rate sweep for the MLP dictionaries is not included.
 - FVU measurements on non-English text beyond the Korean example are not included.
-- Organized code for reproducing dictionary training is not yet included in the release described by the sources.
+- The code that generated the model's own continuations and chat answers, one of the training text sources, is not in the statescope repository yet. The training code itself is: it was compared with the original code on short runs, not on a full-length run.
 
 ## License
 

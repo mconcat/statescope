@@ -2,7 +2,7 @@
 
 This repository provides per-layer dictionaries for Qwen3.5-0.8B. The model has 24 layers and width 1024. A **state dictionary** represents the residual stream at two sites. An **MLP dictionary** represents the layer's MLP operations. The two dictionaries are trained separately.
 
-The repository contains the reader, checks and training code. Separately published checkpoints total 40.1 GiB. The [model card](release/qwen35-08b/MODEL_CARD.md) contains all measured numbers. The MLP recipe, M1w, is a variant of Anthropic's sparse mixture of linear transforms; the card lists its differences.
+The repository contains the reader, checks and training code. The checkpoints, 40.1 GiB in total, are not part of this repository. The [model card](release/qwen35-08b/MODEL_CARD.md) contains all measured numbers. The MLP recipe, M1w, is a variant of Anthropic's sparse mixture of linear transforms; the card lists its differences.
 
 This is a cleaned-up rewrite of research code. The rule of each comparison with the original code was written in [tests/EQUIVALENCE_RULES.md](tests/EQUIVALENCE_RULES.md) before the comparison was run. One rule, R4.6, was written after its comparison; the file says so and gives the reason.
 
@@ -111,6 +111,7 @@ Every part was compared with the frozen original. Comparisons used Qwen3.5-0.8B,
 
 ### What the comparisons do NOT show
 
+- The `statescope` command line was not used for the comparisons, which called the same library functions through test scripts. Of its subcommands only `verify` has been run on the release. Calibration and training subcommands accept Qwen3.5-0.8B only.
 - Full-length training over tens of millions of tokens was not repeated.
 - Trainer comparisons covered only layer 19 and seed 0. Budgets not divisible by the batch were not compared.
 - The layer 9 state dictionary used earlier versions of two source files absent from the frozen copy. Only reader-level tests cover it.
