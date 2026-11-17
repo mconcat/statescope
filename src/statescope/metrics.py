@@ -54,12 +54,17 @@ def molt_heldout_numbers(exported: MoltOps, heldout: dict[str, tuple[torch.Tenso
 @torch.no_grad()
 def vocab_heldout_fvu(vocab: StateVocab, site: str, splits: list[torch.Tensor]) -> float:
     """splits: raw activations of `site`, one tensor (n, d) per held-out split. Sum of the splits' SSE over the sum of the splits' SST
-    (each split around its own mean)."""
+    (each split around its own mean). For a dictionary with per-token RMS input this is the FVU of the normalised residual x / rms(x),
+    the units the dictionary reads and its trainer reports."""
     sse, sst = 0.0, 0.0
     for x in splits:
         x = x.to(vocab.device)
         groups, codes = vocab.encode(x, site)
-        x_hat = vocab.decode(groups, codes, site)
+        rms = vocab.token_rms(x)
+        if rms is None:
+            x_hat = vocab.decode(groups, codes, site)
+        else:
+            x, x_hat = x / rms, vocab.decode(groups, codes, site, rms=torch.ones_like(rms))
         sse += float(((x - x_hat).double() ** 2).sum())
         sst += _sst(x)
     return sse / sst

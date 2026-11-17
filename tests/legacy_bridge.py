@@ -43,13 +43,14 @@ def verify_snapshot(snapshot: Path) -> None:
 
 
 def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int = 3600, *, training: bool = False,
-               coverage: bool = False) -> Path:
+               coverage: bool = False, snapshot: Path | None = None) -> Path:
     """Run tests/legacy_scripts/<script> with `--out <dir>` + args; returns <dir> (cached). Raises if the script fails.
 
     training: a trainer run. It goes to settings.train_device (queued on settings.train_lock if set) and caps its own memory through
               its --mem-gb argument, so this process must not be using that GPU's budget at the same time.
-    coverage: record executed lines of the snapshot (and of files the script writes into <dir>) in <dir>/.coverage."""
-    snapshot = settings.need_legacy_snapshot().resolve()
+    coverage: record executed lines of the snapshot (and of files the script writes into <dir>) in <dir>/.coverage.
+    snapshot: another frozen copy than the first design's (settings.need_snapshot2() for the second design)."""
+    snapshot = (snapshot or settings.need_legacy_snapshot()).resolve()
     verify_snapshot(snapshot)
     device = settings.train_device if training else settings.device
     script_path = SCRIPTS / script

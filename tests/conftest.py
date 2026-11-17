@@ -53,6 +53,8 @@ class Settings:
     train_device: str               # device of the short training runs (one process at a time)
     train_gb: float                 # their memory cap (the original runs used 16 for the MLP dictionary, 9 for the state dictionary)
     train_lock: Path | None         # if set, training runs queue on this lock file with flock (a GPU shared with other work)
+    snapshot2: Path = REPO / "legacy_snapshot2"   # frozen reference code of the second design
+    molt2_root: Path | None = None  # second design, MLP dictionaries: holds L<layer>/export/{weights.safetensors, config.yaml}
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
@@ -68,6 +70,24 @@ class Settings:
         if not (self.legacy_snapshot / "SHA256SUMS").is_file():
             pytest.fail(f"no frozen legacy snapshot at {self.legacy_snapshot} (make one with devtools/freeze_legacy.py)", pytrace=False)
         return self.legacy_snapshot
+
+    def need_snapshot2(self) -> Path:
+        if not (self.snapshot2 / "SHA256SUMS").is_file():
+            pytest.fail(f"no frozen snapshot of the second design at {self.snapshot2} (make one with devtools/freeze_design2.py)", pytrace=False)
+        return self.snapshot2
+
+    def vocab2_dir(self, layer: int) -> Path:
+        """second design: export folder of a layer's state dictionary in the original results"""
+        return self.need_legacy_results() / "mlp_track" / "q08c" / "train1" / f"L{layer}" / "B1" / "vocab_B1s0" / "final"
+
+    def calib2_dir(self, layer: int) -> Path:
+        """second design: calibration folder of a layer (statistics + held-out activations of the new corpus)"""
+        return self.need_legacy_results() / "mlp_track" / "q08c" / "calib1" / f"calib_q08_L{layer}"
+
+    def molt2_dir(self, layer: int) -> Path:
+        if self.molt2_root is None or not self.molt2_root.is_dir():
+            pytest.fail("STATESCOPE_MOLT2_ROOT is not set or is not a folder (see tests/local.env.example)", pytrace=False)
+        return self.molt2_root / f"L{layer}"
 
     def layer_dir(self, layer: int, kind: str) -> Path:
         """release folder of one dictionary: kind is "vocab" or "molt" """
@@ -95,6 +115,8 @@ def settings() -> Settings:
         train_device=os.environ.get("STATESCOPE_TRAIN_DEVICE", os.environ.get("STATESCOPE_DEVICE", "cuda:0")),
         train_gb=float(os.environ.get("STATESCOPE_TRAIN_GB", "16")),
         train_lock=_path_or_none("STATESCOPE_TRAIN_GPU_LOCK"),
+        snapshot2=_path_or_none("STATESCOPE_SNAPSHOT2") or REPO / "legacy_snapshot2",
+        molt2_root=_path_or_none("STATESCOPE_MOLT2_ROOT"),
     )
 
 
