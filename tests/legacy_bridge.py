@@ -12,6 +12,7 @@ frozen, so a reference is computed once.
 """
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import os
@@ -65,6 +66,7 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
     legacy_gb = settings.gpu_gb - 2.0
     if not training and torch.cuda.is_initialized():
         # the legacy process shares this process's GPU budget: this process must hold (almost) nothing while it runs
+        gc.collect()                 # models of earlier tests have reference cycles; without this their memory is still held
         torch.cuda.empty_cache()
         held_gb = torch.cuda.memory_reserved(torch.device(device)) / 2**30
         if held_gb > 1.0:
