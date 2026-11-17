@@ -6,12 +6,16 @@
     statescope foldcheck --molt <export dir> --calib-dir <calib dir> [--fold-err 3.1e-3]
     statescope splice    --model qwen3.5-0.8b --root <release folder> --layers 9,19 --corpus <jsonl> --out <json>
 
+    statescope train-vocab --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --tokens 50e6 --out <run dir>     <data paths>
+    statescope train-molt  --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --fixmap <file> --tokens 29.3e6 --out <run dir>   <data paths>
+
 <data paths> = --pile-dir --ultrachat-dir --view-corpus --full-corpus (see statescope.config.DataPaths).
-The two trainers have their own entry points: `python -m statescope.molt.train` and `python -m statescope.vocab.train`.
+The order for one layer: calibrate, fixedmap, then the two trainers (independent of each other), then foldcheck and splice on the exports.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 
@@ -66,6 +70,45 @@ def cmd_fixedmap(args: argparse.Namespace) -> None:
     lm = load_language_model(MODELS[args.model], args.device)
     stream = training_stream(lm.tokenizer, _data_paths(args), MIX_08B)
     print(json.dumps(fixed_map(lm, args.layer, stream, args.calib_dir, args.out), indent=1))
+
+
+def _training_setup(args: argparse.Namespace):
+    """what both trainers need: the capped device, calibration statistics, the language model and the token stream"""
+    from statescope.calibration import load_calibration
+    from statescope.data.mix import training_stream
+    from statescope.lm import load_language_model
+    _cap_gpu(args.device, args.mem_gb)
+    torch.manual_seed(args.seed)
+    torch.set_float32_matmul_precision("highest")
+    stats = load_calibration(args.calib_dir, torch.device(args.device))
+    lm = load_language_model(MODELS[args.model], args.device)
+    stream = training_stream(lm.tokenizer, _data_paths(args), MIX_08B)
+    return stats, lm, stream
+
+
+def cmd_train_vocab(args: argparse.Namespace) -> None:
+    from statescope.train.loop import LoopSettings
+    from statescope.vocab.recipe import VocabRecipe
+    from statescope.vocab.train import train_vocab
+    stats, lm, stream = _training_setup(args)
+    loop = LoopSettings(tokens=int(args.tokens), seed=args.seed)
+    fvu = train_vocab(lm, args.layer, stream, stats, args.calib_dir, VocabRecipe(seed=args.seed), loop, args.out, args.log_every)
+    print(json.dumps({"heldout_fvu": fvu}, indent=1))
+
+
+def cmd_train_molt(args: argparse.Namespace) -> None:
+    from safetensors.torch import load_file
+
+    from statescope.lm import Capturer
+    from statescope.molt.recipe import MoltRecipe
+    from statescope.molt.train import train_molt
+    stats, lm, stream = _training_setup(args)
+    capturer = Capturer(lm, args.layer, MIX_08B.min_pos)
+    skip_map = load_file(args.fixmap)["W_skip_std"]
+    recipe = dataclasses.replace(MoltRecipe(), seed=args.seed)
+    final = train_molt(lm, capturer, stream, stats, args.calib_dir, skip_map, args.out, recipe, tokens=int(args.tokens),
+                       log_every=args.log_every, device=torch.device(args.device))
+    print(json.dumps(final, indent=1))
 
 
 def cmd_foldcheck(args: argparse.Namespace) -> None:
@@ -134,6 +177,26 @@ def main() -> None:
     _add_data_paths(p)
     gpu(p)
     p.set_defaults(run=cmd_fixedmap)
+
+    def training(p: argparse.ArgumentParser, default_tokens: float) -> None:
+        p.add_argument("--model", required=True, choices=sorted(MODELS))
+        p.add_argument("--layer", type=int, required=True)
+        p.add_argument("--calib-dir", required=True)
+        p.add_argument("--tokens", type=float, default=default_tokens, help="training budget in tokens")
+        p.add_argument("--seed", type=int, default=0, help="only seed 0 has been compared with the original code")
+        p.add_argument("--log-every", type=int, default=250, help="steps between log records")
+        p.add_argument("--out", required=True, help="run folder to write (export/, logs, final numbers)")
+        _add_data_paths(p)
+        gpu(p)
+
+    p = sub.add_parser("train-vocab", help="train a layer's state dictionary")
+    training(p, 50e6)
+    p.set_defaults(run=cmd_train_vocab)
+
+    p = sub.add_parser("train-molt", help="train a layer's MLP dictionary (recipe M1w)")
+    training(p, 29.3e6)
+    p.add_argument("--fixmap", required=True, help="the fixed mean-gate map written by `statescope fixedmap`")
+    p.set_defaults(run=cmd_train_molt)
 
     p = sub.add_parser("foldcheck", help="gate decisions of an exported MLP dictionary in fp32 vs fp64")
     p.add_argument("--molt", required=True, help="the dictionary's export folder")
