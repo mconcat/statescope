@@ -17,6 +17,9 @@ model = ["transformers>=5.20", "flash-linear-attention>=0.6"]
 train = ["transformers>=5.20", "flash-linear-attention>=0.6", "numpy", "pyarrow"]
 dev = ["pytest", "coverage"]
 
+[project.scripts]
+statescope = "statescope.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
