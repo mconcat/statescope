@@ -46,12 +46,12 @@ class Settings:
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
-            pytest.fail("LAYER_DICTS_RELEASE_ROOT is not set or has no layers/ folder (see tests/local.env.example)", pytrace=False)
+            pytest.fail("STATESCOPE_RELEASE_ROOT is not set or has no layers/ folder (see tests/local.env.example)", pytrace=False)
         return self.release_root
 
     def need_legacy_results(self) -> Path:
         if self.legacy_results is None or not self.legacy_results.is_dir():
-            pytest.fail("LAYER_DICTS_LEGACY_RESULTS is not set or is not a folder (see tests/local.env.example)", pytrace=False)
+            pytest.fail("STATESCOPE_LEGACY_RESULTS is not set or is not a folder (see tests/local.env.example)", pytrace=False)
         return self.legacy_results
 
     def need_legacy_snapshot(self) -> Path:
@@ -77,11 +77,11 @@ def _path_or_none(name: str) -> Path | None:
 @pytest.fixture(scope="session")
 def settings() -> Settings:
     return Settings(
-        release_root=_path_or_none("LAYER_DICTS_RELEASE_ROOT"),
-        legacy_results=_path_or_none("LAYER_DICTS_LEGACY_RESULTS"),
-        legacy_snapshot=_path_or_none("LAYER_DICTS_LEGACY_SNAPSHOT") or REPO / "legacy_snapshot",
-        device=os.environ.get("LAYER_DICTS_DEVICE", "cuda:0"),
-        gpu_gb=float(os.environ.get("LAYER_DICTS_GPU_GB", "12")),
+        release_root=_path_or_none("STATESCOPE_RELEASE_ROOT"),
+        legacy_results=_path_or_none("STATESCOPE_LEGACY_RESULTS"),
+        legacy_snapshot=_path_or_none("STATESCOPE_LEGACY_SNAPSHOT") or REPO / "legacy_snapshot",
+        device=os.environ.get("STATESCOPE_DEVICE", "cuda:0"),
+        gpu_gb=float(os.environ.get("STATESCOPE_GPU_GB", "12")),
     )
 
 

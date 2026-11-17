@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import torch
 
-from layer_dicts.reader import MoltOps, StateVocab
+from statescope.reader import MoltOps, StateVocab
 
 
 def _sst(y: torch.Tensor) -> float:

@@ -10,10 +10,10 @@ import torch
 from safetensors.torch import load_file
 
 from conftest import REPO, Settings
-from layer_dicts.heldout import HELDOUT_SPLITS, load_heldout
-from layer_dicts.manifest import load_manifest, verify_files
-from layer_dicts.metrics import molt_pooled_fvu, vocab_heldout_fvu
-from layer_dicts.reader import MoltOps, StateVocab, fvu
+from statescope.heldout import HELDOUT_SPLITS, load_heldout
+from statescope.manifest import load_manifest, verify_files
+from statescope.metrics import molt_pooled_fvu, vocab_heldout_fvu
+from statescope.reader import MoltOps, StateVocab, fvu
 from legacy_bridge import run_legacy
 
 MANIFEST = REPO / "release" / "qwen35-08b" / "manifest.json"

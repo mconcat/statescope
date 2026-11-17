@@ -16,7 +16,7 @@ def assert_hermetic() -> list[str]:
     used = []
     for name, module in list(sys.modules.items()):
         top = name.split(".")[0]
-        if top == "layer_dicts":
+        if top == "statescope":
             raise RuntimeError("the refactored package was imported inside a legacy reference run")
         if top not in RESEARCH_PACKAGES:
             continue
