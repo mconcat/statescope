@@ -14,6 +14,10 @@ ALLOWED_EXCEPT = {
     ("src/statescope/lm.py", "_Reached"),     # control flow: the hook ends the forward pass once both tensors are captured
 }
 # machine-specific strings that must not be committed
+# (file, matched text) pairs that are allowed, each for a stated reason
+ALLOWED_STRINGS = {
+    ("src/statescope/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
+}
 FORBIDDEN = [r"/home/", r"/mnt/", r"\b10\.42\.\d", r"\b192\.168\.\d", r"\bprocessor\b", r"\bworkstation\b", r"\bmconcat\b"]
 
 
@@ -52,5 +56,6 @@ def test_no_machine_specific_string_is_committed():
         for pattern in FORBIDDEN:
             for match in re.finditer(pattern, text):
                 line = text.count("\n", 0, match.start()) + 1
-                offenders.append(f"{rel}:{line}: {match.group(0)}")
+                if (rel, match.group(0)) not in ALLOWED_STRINGS:
+                    offenders.append(f"{rel}:{line}: {match.group(0)}")
     assert offenders == []
