@@ -1,0 +1,12 @@
+# frozen copy of the original research code (equivalence reference; never committed)
+legacy_snapshot/
+# environments, caches, test outputs, weights
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage*
+test_out/
+*.safetensors
+*.egg-info/
+GOAL.md
