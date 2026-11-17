@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -57,6 +58,8 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
     out = TEST_OUT / "legacy" / f"{script_path.stem}-{key.hexdigest()[:16]}"
     if (out / "DONE").is_file():
         return out
+    if out.exists():                 # an earlier attempt that did not finish: the legacy trainers refuse to write into a used folder
+        shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
     (SANDBOX / "results").mkdir(parents=True, exist_ok=True)
     legacy_gb = settings.gpu_gb - 2.0

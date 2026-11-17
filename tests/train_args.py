@@ -9,7 +9,10 @@ SHORT_STEPS = 300                     # x 4,096 tokens per step; long enough to 
 LOG_EVERY = 100
 
 
-def _stream_args(settings: Settings, layer: int, tokens: int) -> list[str]:
+DEAD_VARIANT = ["--dead-tokens", "40960"]      # 10 steps instead of 1M tokens: makes the dead-atom auxiliary loss run within a short run
+
+
+def _stream_args(settings: Settings, layer: int, tokens: int, extra: list[str]) -> list[str]:
     """what run.sh passes to the stream trainer, plus the two corpora by absolute path (the originals are defaults relative to the repository)"""
     results = settings.need_legacy_results()
     calib = settings.calib_dir_08b(layer)
@@ -18,21 +21,21 @@ def _stream_args(settings: Settings, layer: int, tokens: int) -> list[str]:
     if (calib / "train_index_kept.json").is_file():
         args += ["--ref-index", str(calib / "train_index_kept.json")]
     args += ["--strict-ref", "0", "--view-corpus", str(results / "site_train" / "corpus_as_of_L13"),
-             "--full-corpus", str(results / "molt_qwen" / "corpus"), "--tokens", str(tokens), "--out", "{RUN}"]
+             "--full-corpus", str(results / "molt_qwen" / "corpus"), "--tokens", str(tokens), *extra, "--out", "{RUN}"]
     return args
 
 
-def legacy_molt_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False) -> list[str]:
+def legacy_molt_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False, extra: tuple[str, ...] = ()) -> list[str]:
     """MLP dictionary, recipe M1w (lane_m1w_layers.sh)"""
     fixmap = settings.need_legacy_results() / "mlp_track" / "fixedmap" / f"L{layer}.safetensors"
     head = ["--module", "measure.mlp_track.train_fixwhite", "--rep", rep] + (["--trace-main"] if trace else [])
     return head + ["--", "--layer", str(layer), "--mem-gb", str(settings.train_gb), "--molt", "M1w=Qfix", "--fixmap", str(fixmap),
-                   "--molt-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096)
+                   "--molt-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096, list(extra))
 
 
-def legacy_vocab_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False) -> list[str]:
+def legacy_vocab_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False, extra: tuple[str, ...] = ()) -> list[str]:
     """state dictionary V0, seed 0 (lane_vocab.sh)"""
     spec = settings.need_legacy_snapshot() / "results" / "mlp_track" / "specs" / "v0.json"
     head = ["--module", "train.layer_recipe", "--rep", rep] + (["--trace-main"] if trace else [])
     return head + ["--", "--layer", str(layer), "--mem-gb", str(settings.train_gb), "--vocabs", str(spec), "--vocab-only", "V0s0",
-                   "--vocab-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096)
+                   "--vocab-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096, list(extra))

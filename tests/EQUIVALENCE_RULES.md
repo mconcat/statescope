@@ -109,3 +109,42 @@ Everything is compared **exactly**: per unit the shard index, the source parts i
 int64 bytes and its length), the `info` record, and the stream state before the unit; plus the set of excluded 64-token prefixes and the
 calibration / held-out reference sequences. One more exact check: a stream restored from the state before unit 120 yields the same units
 120-124 (the trainer's whitening pass relies on snapshot / restore).
+
+## R3. Preparation (written 2026-11-17, before the new preparation code was first run)
+
+Layer 19 of Qwen3.5-0.8B. The references are the files the released dictionaries were trained from, already on disk in the original
+results: the calibration folder (`calib_stats.safetensors`, `meta.json`, four `heldout_*` folders) and the fixed mean-gate map
+(`fixedmap/L19.safetensors`). Their hashes are recorded in the release run's configuration (`calib.sha256`, `fixmap_md5`).
+
+**R3.1** The new calibration writes the same tensors: every tensor of `calib_stats.safetensors` and of every held-out shard equal bit for bit
+(same keys, dtypes, shapes), and the statistics' sha256 (over mu_x, sd_x, mu_y, sd_y) equal to the recorded one.
+**R3.2** The new fixed map writes the same tensors bit for bit, and the file's md5 equals the recorded `fixmap_md5` if the container bytes
+also agree (tensor equality is the rule; the md5 is reported).
+**R3.3 If a tensor is not bit-identical**, the legacy preparation is rerun on this machine before anything else is concluded:
+legacy-rerun == disk means the new code is wrong (fix it); legacy-rerun != disk means the files depend on the machine that made them,
+and then the rule is new == legacy-rerun bit for bit, with the size of the machine difference reported.
+
+## R4. Short training (written 2026-11-17, before any two training runs were compared)
+
+Layer 19 of Qwen3.5-0.8B, seed 0, 300 steps of 4,096 tokens, the release launcher's arguments (`tests/train_args.py`), one GPU, one process
+at a time. Two configurations per dictionary:
+
+- **base**: the release arguments with the short token budget. A traced legacy run showed that no atom is dead within 300 steps
+  (`n_aux_candidates` 0 at every logged step), so this configuration never runs the dead-atom auxiliary loss.
+- **dead**: the same with `--dead-tokens 40960` (10 steps instead of 1M tokens), so that the auxiliary loss runs. The reference is valid
+  only if the legacy run logs `n_aux_selected > 0` at some step; otherwise the configuration is changed (before any new-code run) until it does.
+
+Compared: every tensor of the exported `weights.safetensors`; `whitener.safetensors`; `freq_train.safetensors` / `usage.safetensors`;
+`input.json`; `cfg.json`; and per logged step the trainer's numbers (loss, mse, auxiliary loss, counts of dead / selected atoms or groups,
+active counts, quick held-out FVU). Wall-clock, memory, host, path and code-hash fields are provenance and are not compared; the list of
+such `cfg.json` keys is fixed in the test before the first comparison and every other key must be equal.
+
+**R4.1 Noise floor.** The legacy code is run twice (A, B) per configuration. 
+**R4.2 If A and B are bit-identical** in everything compared: the new code must be bit-identical to A in everything compared. Stage 1 then
+changes structure, names and configuration only, never arithmetic or the order of random draws.
+**R4.3 If A and B differ**: per tensor, max |new - A| <= 3 x max |A - B| (and the same per logged number), which by itself is a weak test
+after 300 steps of amplification. It is therefore paired with checks that do not amplify and must hold exactly or at rounding level:
+(i) `whitener.safetensors` and the initial model (state before the first step) bit-identical; (ii) the first logged step's numbers
+(step 0, before any update) within 1e-6 relative; (iii) one optimizer step from an identical saved state (a legacy checkpoint) within
+1e-6 relative per tensor. The cause of the A/B difference is looked for and written down.
+**R4.4 Final evaluation.** The numbers the trainer writes at the end (held-out FVU per split and pooled, fold error, dead counts) follow R4.2 / R4.3.
