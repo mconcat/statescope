@@ -12,7 +12,7 @@ from safetensors.torch import load_file
 from conftest import REPO, Settings
 from statescope.heldout import HELDOUT_SPLITS, load_heldout
 from statescope.manifest import load_manifest, verify_files
-from statescope.metrics import molt_pooled_fvu, vocab_heldout_fvu
+from statescope.metrics import molt_heldout_numbers, vocab_heldout_fvu
 from statescope.reader import MoltOps, StateVocab, fvu
 from legacy_bridge import run_legacy
 from reader_checks import N_TOKENS, check_molt_against_legacy, check_vocab_against_legacy, legacy_reference
@@ -127,8 +127,8 @@ def test_reader_reproduces_the_manifest_fvu(settings: Settings, device: str, lay
     heldout = {split: load_heldout(calib, split) for split in HELDOUT_SPLITS}
 
     molt = MoltOps(str(settings.layer_dir(layer, "molt")), device)
-    got = molt_pooled_fvu(molt, heldout, chunk=2048)
-    assert abs(got["pooled"] - listed["molt"]["heldout_fvu"]) <= 1e-5, (got, listed["molt"]["heldout_fvu"])
+    got = molt_heldout_numbers(molt, heldout, chunk=2048)
+    assert abs(got["fvu_pooled"] - listed["molt"]["heldout_fvu"]) <= 1e-5, (got, listed["molt"]["heldout_fvu"])
     del molt
     torch.cuda.empty_cache()
 
