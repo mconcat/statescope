@@ -213,3 +213,54 @@ numbers are bit-identical in this one.
 
 The new evaluation keeps the same operation as the legacy one (so it has the same run-to-run variation). Replacing it by a fixed-order sum
 would make it repeatable but would change the reported digits; that is noted as a possible later change, not made here.
+
+## R8. Second 0.8B design: readers (written 2026-11-18, before any test of these readers was run)
+
+The second design keeps the per-layer layout (one state dictionary and one MLP dictionary per layer) with other forms:
+
+- state dictionary: the tied form (`cfg.form == "bsf"`: orthonormal frames `D_g`, encoder `E_g = gamma_g D_g`) reading the residual
+  divided by its own RMS per token (`cfg.input == "token_rms"`; site statistics stored as `site_mu_rms` / `site_scale_rms`);
+- MLP dictionary: the public penalty form (crosslayer-transcoder, branch MOLT, commit 376fabe): JumpReLU gate with a learned threshold per
+  transform, free `U` / `V`, no skip; exported as the trainer's state dict (`weights.safetensors`, `config.yaml`).
+
+"Reference" = the frozen copy `legacy_snapshot2/` (made by `devtools/freeze_design2.py`; not committed; hashes in its `SHA256SUMS`). It
+holds the training bundle that was shipped to the training machines (public code, its fork, capture, loader) and the state dictionary's
+launcher and separately written reader from the original repository. The first snapshot and every rule above are untouched; the first
+design's reader path must stay as it is, which the existing reader tests (R1.2: bit-identical to the released standalone reader) show.
+
+Data, all 24 layers: the first 4,096 tokens of each of the four held-out splits of the layer's calibration folder of the new corpus
+(`x` = raw resid_mid, `y` = raw MLP output; position 0 is kept, as in the trainers' own held-out numbers), fp32 on one GPU. Decisions
+(selected groups, gate values) are compared on all 4 x 4,096 tokens; reconstructed tensors on the first 1,024 tokens of each split (the
+reference tensors of 24 layers would otherwise take about 12 GB of the 20 GB allowed for test outputs).
+
+**R8.1 State reader vs the reference reader** (`measure/mlp_track/vocab_heldout_fvu.Reader`). The new reader does not repeat the
+reference's operations (it keeps the first design's route: QR of the frames, selection by the norm of what a group writes), so pass/fail
+is R0, per split and site: (a) at most 5 tokens whose selected group set differs; (b) over the other tokens with a reference tensor,
+max |raw reconstruction difference| / max |reference raw reconstruction| <= 1e-4. The reference's group indices are recomputed in the
+reference script from the reference reader's own tensors; the script asserts that rebuilding the reconstruction from them is bit-identical
+to what `Reader.recon` returns, so they are the indices it used.
+
+**R8.2 Trainer's held-out number from the reader alone.** For each layer and site, the FVU in the dictionary's own units over the four
+splits (SSE / sum over splits of the squared deviations from the split's own mean) computed with the new reader differs from
+`vocab_heldout_fvu` in the run's `layer_recipe_done.json` by at most 1e-5 absolute (the limit of R1.4).
+
+**R8.3 MLP reader vs the public forward** (`measure/public_molt/lib.load_public` -> the unmodified public `Molt.forward_with_pre_activations`,
+input through the frozen `input_transform`). The new reader sums over transforms in another order (gate applied to the rank-r latents,
+as the fork's `LeanMolt`), so pass/fail is R0, per split: (a) at most 5 (token, transform) pairs whose gate is on in one and off in the
+other; (b) over the tokens with no differing pair and a reference tensor, max |y1 - y2| / max |y1| <= 1e-4. Prediction, reported but not a
+pass/fail condition: 0 differing pairs and gate values equal to within 1e-5 relative, since the gate's input is computed by the same
+operations.
+
+**R8.4 Post-norm coefficients.** The export does not hold the layer's RMSNorm coefficients that the input transform needs (the config
+names a file by an absolute path on the training machine). The tests rebuild them from the language model as the frozen capture script
+does (`w_eff = (1 + weight.double()).float()`, `eps` of `layers[L].post_attention_layernorm`). Where a copy rebuilt by the original
+project exists next to the export (`postnorm_rebuilt/postnorm.safetensors`), the tensor must be bit-identical and `eps` equal.
+
+**R8.5 Sum of writes.** For the first 64 tokens of the pile split: the sum of `transform_write` over the firing transforms plus the
+output mean equals `forward` within 1.5e-6 relative to the largest output (the limit of R1.3); the sum of `group_write` over a token's
+selected groups plus mean and bias equals `decode` within 1e-6 relative (token 0).
+
+Not covered by R8: the recorded held-out numbers of the MLP dictionaries (`heldout.json`) were measured on a captured shard that was
+deleted after training, so they cannot be recomputed here; the FVU of the new reader on the calibration folders' held-out tokens is
+reported as a new measurement, not compared with a record. Trainers, token stream, spliced-in loss and manifest of the second design are
+not part of R8.

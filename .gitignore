@@ -11,3 +11,6 @@ test_out/
 *.egg-info/
 GOAL.md
 tests/local.env
+
+# frozen copy of the second design's reference code (never committed)
+legacy_snapshot2/
