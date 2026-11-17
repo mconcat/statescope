@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "layer-dicts"
+version = "0.1.0"
+description = "Per-layer dictionaries for Qwen3.5: a state dictionary of the residual stream and an operation dictionary of the MLP"
+requires-python = ">=3.12"
+dependencies = ["torch>=2.11", "safetensors>=0.8"]
+
+[project.optional-dependencies]
+# capture() and everything that runs the language model
+model = ["transformers>=5.20", "flash-linear-attention>=0.6"]
+# training and preparation
+train = ["transformers>=5.20", "flash-linear-attention>=0.6", "numpy", "pyarrow"]
+dev = ["pytest", "coverage"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "release: reads the exported checkpoints (LAYER_DICTS_RELEASE_ROOT)",
+    "legacy: compares against the frozen original code (legacy_snapshot/, LAYER_DICTS_LEGACY_RESULTS)",
+    "gpu: needs a CUDA device",
+    "model: loads the language model from the Hugging Face cache",
+]

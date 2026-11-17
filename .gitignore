@@ -10,3 +10,4 @@ test_out/
 *.safetensors
 *.egg-info/
 GOAL.md
+tests/local.env
