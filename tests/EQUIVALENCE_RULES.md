@@ -154,3 +154,13 @@ sha256 of the batch it is about to train on (standardized x, standardized y, the
 `LayerRecipe.pre`); the recording only reads the tensors. The new loop must produce the same 300 x 4 hashes **exactly**, and the same
 per-unit records as the legacy `mix_*.jsonl` (token counts per source, rows used, and the two float statistics of the standardized head)
 **exactly**. Both runs use the same GPU.
+
+**R4.5 The state dictionary's dead-group auxiliary loss (2026-11-17, before any vocabulary comparison).** A traced legacy run showed that
+no group is dead within 300 steps (`n_dead` 0, `L_aux` 0.0 at every logged step), and the legacy dead window (1,000,000 tokens) is a
+literal in the code, not an argument, so no legacy configuration reaches the auxiliary loss in a short run. The base 300-step comparison
+therefore does not test it. It is tested by state injection instead, without changing any legacy code: a legacy process builds the
+dictionary exactly as the trainer does (same seed, same calibration), sets the `since` counter of a fixed set of groups (every 97th group)
+above the window, runs ONE training step on a fixed batch, and saves the losses and every parameter after the step; the new code does the
+same from the same state. Rule: the legacy step must report `n_dead > 0` and `L_aux != 0` (otherwise the test is void); legacy run twice
+gives the noise floor; if the two legacy results are bit-identical the new result must be bit-identical, else R4.3's 3x rule applies per
+tensor with the difference reported.
