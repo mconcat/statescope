@@ -23,9 +23,10 @@ def gate_flip_check(molt: MoltOps, x: torch.Tensor, recorded_fold_err: float | N
     rounding step of h, and (if the trainer's recorded fold error is given) the near-threshold pair whose single flip matches it best."""
     device = molt.e.device
     z = molt.standardize_input(x)
-    a32, y32 = molt.forward(x)
+    a32 = molt.gate(z)
+    y_std = torch.cat([molt._decode(zc, ac) for zc, ac in zip(z.split(molt.chunk), a32.split(molt.chunk))])
     sd_y, mu_y = molt.sd_y.double(), molt.mu_y.double()
-    y_raw = y32.double()                                                    # forward() already returns raw units
+    y_raw = y_std.double() * sd_y + mu_y                                    # back to raw units in float64, as for y64 below
     y_max = float(y_raw.abs().max())
     e64, b64 = molt.e.double(), molt.b.double()
     score_div64, thr64 = molt.score_div.double(), molt.thr.double()

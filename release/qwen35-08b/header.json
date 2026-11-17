@@ -1,0 +1,12 @@
+{
+ "model": "Qwen/Qwen3.5-0.8B",
+ "model_revision": "2fc06364715b967f1860aea9cf38778875588b17",
+ "d": 1024,
+ "n_layers": 24,
+ "seed": 0,
+ "sites": "resid_mid.L = input of layers[L].post_attention_layernorm; resid_post.L = resid_mid.L + output of layers[L].mlp; position 0 dropped",
+ "vocab": "16,384 groups x 4 directions, top-24 groups per token by written norm, 50M tokens per layer",
+ "molt": "41,484 gated low-rank atoms (ranks 1-16, rank budget 131,072), recipe M1w (fixed mean-gate map, whitened gate input), 29.3M tokens per layer",
+ "fvu": "fraction of variance unexplained on held-out tokens of the training mixture (vocab: per site; molt: pooled over the four held-out sets)",
+ "splice": "next-token loss on 100 fineweb-edu documents x 256 tokens (outside the training mixture) with one replacement at the layer: dce = CE - CE clean (nats), kl = KL(clean || spliced); see statescope/splice.py for the arms"
+}
