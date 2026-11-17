@@ -19,6 +19,8 @@ SITES = (f"resid_mid.{LAYER}", f"resid_post.{LAYER}")
 STEP_NUMBERS = (*(f"L_rec__{s}" for s in SITES), "L_aux", "grad_norm", "n_dead", "n_fired", "lr", "clip_hits", "n_always")
 # cfg.json keys that only say which code wrote the file (fixed before the first comparison); every other key must be equal
 CFG_PROVENANCE = {"trainer", "code_md5"}
+# rule R4.6: the legacy held-out evaluation sums with index_add_ on repeated rows on the GPU and does not reproduce its own digits
+UNREPEATABLE = {"heldout_fvu": 1e-7}
 
 
 def _steps(records: list[dict]) -> list[dict]:
@@ -39,7 +41,7 @@ def _legacy_files(run: Path) -> RunFiles:
         jsons={"cfg.json": json.loads((export / "cfg.json").read_text())},
         steps=_steps(read_jsonl(run / "run" / "vocab_V0s0.jsonl")),
         final={f"heldout_fvu.{site}": value for site, value in done["vocab_heldout_fvu"]["V0s0"].items()},
-        provenance={"cfg.json": CFG_PROVENANCE})
+        provenance={"cfg.json": CFG_PROVENANCE}, unrepeatable=UNREPEATABLE)
 
 
 def _new_files(run: Path) -> RunFiles:
@@ -51,7 +53,7 @@ def _new_files(run: Path) -> RunFiles:
         jsons={"cfg.json": json.loads((export / "cfg.json").read_text())},
         steps=_steps(read_jsonl(run / "run" / "log.jsonl")),
         final={f"heldout_fvu.{site}": value for site, value in final["heldout_fvu"].items()},
-        provenance={"cfg.json": CFG_PROVENANCE})
+        provenance={"cfg.json": CFG_PROVENANCE}, unrepeatable=UNREPEATABLE)
 
 
 @pytest.mark.legacy

@@ -188,3 +188,28 @@ of the 41,484 atoms fire in every batch, so none stays silent for ten batches). 
 `--dead-tokens 4096` (an atom that was silent in the previous batch counts as dead). The legacy run with it logs
 `n_aux_candidates = n_aux_selected` = 205 at step 100 and 329 at step 200, auxiliary loss 0.0315 and 0.0317, and its loss differs from the
 base run from step 100 on, so the auxiliary gradient moves the weights. Everything else in R4 is unchanged.
+
+**R4.6 Amendment for the state dictionary's held-out FVU numbers (2026-11-17, written AFTER the first vocabulary comparison; the reason is
+a measured property of the legacy code, and the old rule text above is left as it was).**
+
+What was found: the two legacy vocabulary runs are bit-identical in every exported tensor, every usage counter and every per-step training
+number, but not in the six held-out FVU numbers (step 0, step 299, final; two sites), which differ by 1.9e-9 to 7.7e-9. Four legacy runs
+with identical weights (A, B and two earlier runs) give four different sets of digits, and one legacy process reports two different values
+for the same weights. Cause, measured: the legacy evaluation sums each token's 24 group writes with `index_add_` on repeated rows on the GPU,
+whose order of additions is not fixed; five repeats on identical inputs differ by up to 3.8e-6 in the reconstruction (values up to 13.8),
+while the same sum in a fixed order is bit-identical. Training does not use that operation.
+
+Why the old rule cannot be applied to these numbers: R4.3 takes |A - B| of one pair as each number's noise floor. For a number that jumps
+between a few discrete values about 1.9e-9 apart, one pair gives 0 for some numbers by chance (it did for step 299, resid_post), and
+then the rule demands bit-identity with a value the legacy code itself does not reproduce.
+
+Replacement, for the held-out FVU numbers of the state dictionary only: |new - A| <= 1e-7 absolute, and likewise |A - B| <= 1e-7 (so a
+legacy pair outside the bound would fail the test too). 1e-7 is about 13 times the largest legacy-to-legacy difference seen (7.7e-9) and
+is 1.3e-7 of the smallest value concerned (0.39); it was chosen from the legacy spread, and the new code's differences (at most 1.2e-8)
+were already known when it was written. These numbers are excluded when deciding whether the two legacy runs are bit-identical; for
+everything else R4.2 applies unchanged (bit-identity). The three exact checks R4.3 asks for exist: the initial state (init hash, parameter
+hashes, calibration record) and one optimizer step from an identical state are bit-identical in the R4.5 test, and the step-0 training
+numbers are bit-identical in this one.
+
+The new evaluation keeps the same operation as the legacy one (so it has the same run-to-run variation). Replacing it by a fixed-order sum
+would make it repeatable but would change the reported digits; that is noted as a possible later change, not made here.

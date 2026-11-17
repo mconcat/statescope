@@ -20,6 +20,9 @@ class RunFiles:
     steps: list[dict]                         # per logged step: {"step": n, <number name>: value, ...}
     final: dict[str, float]                   # numbers written at the end
     provenance: dict[str, set[str]] = field(default_factory=dict)    # label -> keys of that JSON that are not compared
+    # Numbers that the LEGACY code itself does not reproduce from run to run (rule R4.6): name fragment -> absolute tolerance.
+    # A step or final number whose name contains a fragment is compared with that tolerance and does not count against bit-identity.
+    unrepeatable: dict[str, float] = field(default_factory=dict)
 
 
 def _strip(obj, drop: set[str]):
@@ -47,8 +50,15 @@ def _number_diffs(a: dict, b: dict) -> dict[str, float]:
     return {k: (0.0 if a[k] == b[k] else max(abs(a[k] - b[k]), 5e-324)) for k in a}
 
 
+def _tolerance(name: str, unrepeatable: dict[str, float]) -> float | None:
+    for fragment, tol in unrepeatable.items():
+        if fragment in name:
+            return tol
+    return None
+
+
 def noise_floor(a: RunFiles, b: RunFiles) -> dict:
-    """R4.1: every difference between the two legacy runs"""
+    """R4.1: every difference between the two legacy runs. `identical` ignores the numbers listed in a.unrepeatable (R4.6)."""
     floor: dict = {"tensors": {}, "steps": [], "final": _number_diffs(a.final, b.final), "problems": []}
     for label in a.tensors:
         problems, diffs = _tensor_diffs(a.tensors[label], b.tensors[label])
@@ -60,21 +70,27 @@ def noise_floor(a: RunFiles, b: RunFiles) -> dict:
     for label in a.jsons:
         if _strip(a.jsons[label], a.provenance.get(label, set())) != _strip(b.jsons[label], b.provenance.get(label, set())):
             floor["problems"].append(f"legacy A vs B: {label} differs")
+    repeatable_numbers = [v for d in floor["steps"] + [floor["final"]] for k, v in d.items() if _tolerance(k, a.unrepeatable) is None]
     floor["identical"] = (not floor["problems"] and all(v == 0.0 for d in floor["tensors"].values() for v in d.values())
-                          and all(v == 0.0 for d in floor["steps"] for v in d.values()) and all(v == 0.0 for v in floor["final"].values()))
+                          and all(v == 0.0 for v in repeatable_numbers))
     return floor
 
 
 def compare(new: RunFiles, a: RunFiles, b: RunFiles) -> tuple[list[str], dict]:
-    """Returns (failures, report). No failures = the new run satisfies R4.2 (if A and B are bit-identical) or R4.3's tolerance part."""
+    """Returns (failures, report). No failures = the new run satisfies R4.2 (if A and B are bit-identical) or R4.3's tolerance part;
+    numbers listed in a.unrepeatable follow R4.6 (an absolute tolerance, applied to |new - A| and to |A - B|)."""
     floor = noise_floor(a, b)
     failures = list(floor["problems"])
     exact = floor["identical"]
-    report = {"legacy_runs_bit_identical": exact, "max_new_vs_a": {}, "noise": {}}
+    report = {"legacy_runs_bit_identical": exact, "max_new_vs_a": {}, "noise": {}, "unrepeatable_in_legacy": sorted(a.unrepeatable)}
 
     def check(name: str, diff: float, noise: float) -> None:
         report["max_new_vs_a"][name], report["noise"][name] = diff, noise
-        if (diff != 0.0) if exact else (diff > 3 * noise):
+        tol = _tolerance(name, a.unrepeatable)
+        if tol is not None:
+            if diff > tol or noise > tol:
+                failures.append(f"{name}: |new - A| = {diff:.3g}, |A - B| = {noise:.3g}, allowed {tol:.3g} (R4.6)")
+        elif (diff != 0.0) if exact else (diff > 3 * noise):
             failures.append(f"{name}: |new - A| = {diff:.3g}, |A - B| = {noise:.3g}")
 
     for label in a.tensors:

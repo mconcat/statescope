@@ -7,9 +7,11 @@ markers `release` / `legacy`, so they can be left out on purpose with `-m "not r
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.dont_write_bytecode = True      # tests import the frozen reader by path; no bytecode may appear inside the snapshot
 os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")   # device indices as nvidia-smi shows them; must be set before CUDA starts
 
 import pytest  # noqa: E402
