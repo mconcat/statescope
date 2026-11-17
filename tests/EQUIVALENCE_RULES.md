@@ -83,3 +83,18 @@ texts) must reproduce the table of the snapshot's `notes/mlp_track/release.md` f
 0.002 of the printed value; mean active atoms within 0.2. The table is printed to three decimals (one decimal for the atoms), so 0.0005
 (0.05) is print rounding; the rest is allowance for the bf16 forward on another machine, whose size has not been measured [prediction: it
 is below 0.001].
+
+## R5. Spliced-in loss (written 2026-11-17, before the new splice code was first run)
+
+Data and arms as the original (`measure/mlp_track/splice_loss.py`): 100 fineweb-edu documents x 256 tokens from row 131,500 on, layers 9 and 19,
+bf16 model, batch of 2 documents. Quantities: `ce_clean`, and per arm `dce`, `kl`, `fvu_batchwise`.
+
+**R5.1 Noise floor.** The legacy code is run twice on this machine in two separate processes (A and B). |A - B| per quantity is the
+process-to-process variation (kernel tuning of the bf16 forward); it is recorded, whatever it is.
+
+**R5.2 New vs legacy.** For every quantity q: |new_q - A_q| <= max(3 x |A_q - B_q|, 1e-6). `n_positions` exact. The identity-splice KL of the
+first batch <= 1e-4 (the original's own self-check).
+
+**R5.3 New vs the recorded numbers** (measured on processor, 2026-11-16; `results/mlp_track/splice_loss/splice.json` in the snapshot): `ce_clean`
+and every arm's `dce` and `kl` within 0.002 nat. The public table prints three decimals; the allowance is for another machine's bf16 forward,
+whose size has not been measured [prediction: below 0.001].
