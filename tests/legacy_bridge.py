@@ -27,6 +27,7 @@ from conftest import REPO, TEST_OUT, Settings
 
 SCRIPTS = REPO / "tests" / "legacy_scripts"
 SANDBOX = TEST_OUT / "legacy_sandbox"
+MIN_REFERENCE_GB = 8.0          # the reader / capture / splice references ran under an 8 GiB cap in the original
 _verified: set[Path] = set()
 
 
@@ -63,14 +64,18 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
     (SANDBOX / "results").mkdir(parents=True, exist_ok=True)
+    # The legacy process shares this process's GPU budget (settings.gpu_gb). What this process still holds is subtracted from the
+    # legacy process's cap. (After a forward pass a few MB stay allocated inside the kernels and pin a block of about 1.4 GiB, so
+    # "holds nothing" is not reachable; a real leak of a model would leave too little for the reference and fail here.)
     legacy_gb = settings.gpu_gb - 2.0
     if not training and torch.cuda.is_initialized():
-        # the legacy process shares this process's GPU budget: this process must hold (almost) nothing while it runs
-        gc.collect()                 # models of earlier tests have reference cycles; without this their memory is still held
+        gc.collect()                 # models of earlier tests have reference cycles
         torch.cuda.empty_cache()
         held_gb = torch.cuda.memory_reserved(torch.device(device)) / 2**30
-        if held_gb > 1.0:
-            raise RuntimeError(f"this process still holds {held_gb:.1f} GiB on {device}; free it before a legacy reference run")
+        legacy_gb = settings.gpu_gb - held_gb - 0.6
+        if legacy_gb < MIN_REFERENCE_GB:
+            raise RuntimeError(f"this process still holds {held_gb:.1f} GiB on {device}: only {legacy_gb:.1f} GiB of the {settings.gpu_gb:.0f} GiB "
+                               f"budget would be left for the legacy reference run (it needs {MIN_REFERENCE_GB:.0f})")
     env = dict(os.environ)
     env.update({
         "PYTHONPATH": str(snapshot),
