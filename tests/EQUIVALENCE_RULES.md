@@ -98,3 +98,14 @@ first batch <= 1e-4 (the original's own self-check).
 **R5.3 New vs the recorded numbers** (measured on processor, 2026-11-16; `results/mlp_track/splice_loss/splice.json` in the snapshot): `ce_clean`
 and every arm's `dce` and `kl` within 0.002 nat. The public table prints three decimals; the allowance is for another machine's bf16 forward,
 whose size has not been measured [prediction: below 0.001].
+
+## R2. Token stream (written 2026-11-17, before the new stream code was first run)
+
+CPU only, no model. The legacy `train.molt_stream_data.MixStream` is set up exactly as `train.molt_stream.main` does for the 0.8B runs
+(`extend=True`, `check_view_prefix()`, `excl = prefix_set(reference_seqs(...))`) and asked for its first 200 units (52.4M tokens: more than
+the longest 0.8B run, 50M, so the stream passes the end of the original cache at unit 114 and the on-policy pools' reserved rows).
+
+Everything is compared **exactly**: per unit the shard index, the source parts in order, every sequence token for token (sha256 of its
+int64 bytes and its length), the `info` record, and the stream state before the unit; plus the set of excluded 64-token prefixes and the
+calibration / held-out reference sequences. One more exact check: a stream restored from the state before unit 120 yields the same units
+120-124 (the trainer's whitening pass relies on snapshot / restore).
