@@ -9,7 +9,7 @@ SHORT_STEPS = 300                     # x 4,096 tokens per step; long enough to 
 LOG_EVERY = 100
 
 
-DEAD_VARIANT = ["--dead-tokens", "40960"]      # 10 steps instead of 1M tokens: makes the dead-atom auxiliary loss run within a short run
+DEAD_VARIANT = ["--dead-tokens", "4096"]       # an atom silent for one batch counts as dead: makes the auxiliary loss run within a short run
 
 
 def _stream_args(settings: Settings, layer: int, tokens: int, extra: list[str]) -> list[str]:
