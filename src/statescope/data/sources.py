@@ -116,3 +116,8 @@ def corpus_sequences(corpus: str, split: str) -> tuple[list[torch.Tensor], list[
             seqs.append(t["tokens"][offsets[i]:offsets[i + 1]].long())
             src.append(int(t["src"][i]))
     return seqs, src
+
+
+def corpus_prompt_lengths(corpus: str, split: str) -> list[int]:
+    """for every sequence of an on-policy corpus split: how many of its tokens are the prompt (the rest the model wrote)"""
+    return [int(n) for t in _corpus_parts(corpus, split) for n in t["prompt_len"]]
