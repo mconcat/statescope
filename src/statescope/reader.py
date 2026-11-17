@@ -16,7 +16,8 @@ Two dictionaries per layer L, trained separately:
                          8-128 with a JumpReLU gate, no linear part.
 
 Position 0 of every sequence was dropped in training of the first design's dictionaries and of the second design's state dictionary;
-drop it when you measure anything with them.
+the second design's MLP dictionary (PublicMolt) was trained with position 0 included. Drop position 0 when you measure anything
+that involves a dictionary trained without it.
 
     V = StateVocab("layers/L19/vocab", "cuda")
     M = MoltOps("layers/L19/molt", "cuda")

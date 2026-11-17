@@ -158,3 +158,19 @@ def test_molt_reader(layer: int, settings: Settings, device: str, post_norm_dir:
     measured["max_rel_diff_sum_of_transform_writes_vs_forward"] = float((total - y64).abs().max() / y64.abs().max())
     _save(layer, "molt", measured)
     assert measured["max_rel_diff_sum_of_transform_writes_vs_forward"] <= 1.5e-6, measured
+
+
+def test_reexported_format(settings: Settings, device: str, post_norm_dir: Path) -> None:
+    """R8.6: the later export format (postnorm.safetensors inside the export folder; a pre-norm export is refused)"""
+    export = settings.molt2_reexport("old_corpus_L9_pub128_post")
+    rebuilt = post_norm_dir / "L9.safetensors"
+    with safe_open(str(export / "postnorm.safetensors"), framework="pt") as a, safe_open(str(rebuilt), framework="pt") as b:
+        assert torch.equal(a.get_tensor("w_eff"), b.get_tensor("w_eff"))
+        assert float(a.metadata()["eps"]) == float(b.metadata()["eps"])
+    x = load_heldout(str(settings.calib2_dir(9)), "pile", N_TENSOR)[0].to(device)
+    g_default, y_default = PublicMolt(str(export), device).forward(x)
+    g_explicit, y_explicit = PublicMolt(str(export), device, post_norm=str(rebuilt)).forward(x)
+    assert torch.equal(g_default, g_explicit) and torch.equal(y_default, y_explicit)
+    assert int((g_default > 0).sum()) > 0
+    with pytest.raises(ValueError, match="post-norm"):
+        PublicMolt(str(settings.molt2_reexport("old_corpus_L9_pub128")), device)

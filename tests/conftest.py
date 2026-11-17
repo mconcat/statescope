@@ -55,6 +55,7 @@ class Settings:
     train_lock: Path | None         # if set, training runs queue on this lock file with flock (a GPU shared with other work)
     snapshot2: Path = REPO / "legacy_snapshot2"   # frozen reference code of the second design
     molt2_root: Path | None = None  # second design, MLP dictionaries: holds L<layer>/export/{weights.safetensors, config.yaml}
+    molt2_reexports: Path | None = None   # holds the two layer-9 exports in the later format (old_corpus_L9_pub128{,_post}/L9/export)
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
@@ -89,6 +90,11 @@ class Settings:
             pytest.fail("STATESCOPE_MOLT2_ROOT is not set or is not a folder (see tests/local.env.example)", pytrace=False)
         return self.molt2_root / f"L{layer}"
 
+    def molt2_reexport(self, name: str) -> Path:
+        if self.molt2_reexports is None or not (self.molt2_reexports / name).is_dir():
+            pytest.fail(f"STATESCOPE_MOLT2_REEXPORTS is not set or has no {name}/ folder (see tests/local.env.example)", pytrace=False)
+        return self.molt2_reexports / name / "L9" / "export"
+
     def layer_dir(self, layer: int, kind: str) -> Path:
         """release folder of one dictionary: kind is "vocab" or "molt" """
         return self.need_release_root() / "layers" / f"L{layer:02d}" / kind
@@ -117,6 +123,7 @@ def settings() -> Settings:
         train_lock=_path_or_none("STATESCOPE_TRAIN_GPU_LOCK"),
         snapshot2=_path_or_none("STATESCOPE_SNAPSHOT2") or REPO / "legacy_snapshot2",
         molt2_root=_path_or_none("STATESCOPE_MOLT2_ROOT"),
+        molt2_reexports=_path_or_none("STATESCOPE_MOLT2_REEXPORTS"),
     )
 
 
