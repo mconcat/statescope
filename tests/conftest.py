@@ -34,6 +34,11 @@ def _read_local_env() -> None:
 
 
 _read_local_env()
+# The language model is read from one named cache, offline. A separate variable, because a shell-wide HF_HOME (a lab default that points
+# somewhere else) must not silently decide which copy of the model the tests load.
+if os.environ.get("STATESCOPE_HF_HOME"):
+    os.environ["HF_HOME"] = os.environ["STATESCOPE_HF_HOME"]
+    os.environ["HF_HUB_OFFLINE"] = "1"
 
 
 @dataclass(frozen=True)
