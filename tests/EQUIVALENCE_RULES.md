@@ -72,3 +72,14 @@ resid_mid and MLP output bit-identical (measured 0.0). resid_mid + mlp_out vs th
 **R1.6 Width 2,560 (Qwen3.5-4B).** The new reader loads the existing 4B L16 test exports and satisfies R1.3's structure against the legacy
 readers on the first 4,096 held-out pile tokens of that run's calibration folder: rule R0 (a)+(b), plus the two "sum of writes" identities
 at the R1.3 limits. No recorded 4B numbers exist for the reader, so nothing stricter is asserted.
+
+**R1.5, clarification (2026-11-17, before the capture test was first run).** As in the original measurement, both captures run in one
+process on the same loaded model object: the legacy reference process loads the new `reader.py` by file path (the file is self-contained)
+and calls its `capture` on the model that `measure.models.load_model` returned. Bit-identity across two separately loaded models is not
+claimed: the GatedDeltaNet kernels are tuned per process.
+
+**R1.7 Example run (2026-11-17, before first run).** The example (model loaded the documented way with `AutoModelForCausalLM`, three built-in
+texts) must reproduce the table of the snapshot's `notes/mlp_track/release.md` for layers 19 and 9: token counts exact; each FVU within
+0.002 of the printed value; mean active atoms within 0.2. The table is printed to three decimals (one decimal for the atoms), so 0.0005
+(0.05) is print rounding; the rest is allowance for the bf16 forward on another machine, whose size has not been measured [prediction: it
+is below 0.001].
