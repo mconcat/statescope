@@ -271,3 +271,13 @@ Not covered by R8: the recorded held-out numbers of the MLP dictionaries (`heldo
 deleted after training, so they cannot be recomputed here; the FVU of the new reader on the calibration folders' held-out tokens is
 reported as a new measurement, not compared with a record. Trainers, token stream, spliced-in loss and manifest of the second design are
 not part of R8.
+
+**R8.6 Re-exported format (written 2026-11-18, before this check was run).** The original project changed its export after R8 was
+written: the export folder now holds `postnorm.safetensors` and the config names it by a relative path. Two such exports exist (layer 9,
+trained on the old corpus; not among the 24 layers): one with post-norm input, one with pre-norm input.
+(a) `PublicMolt(<post-norm export>)` with no `post_norm` argument reads the folder's own file; its `w_eff` must be bit-identical to the
+one rebuilt from the language model and `eps` equal, and gate values and outputs on the first 1,024 held-out pile tokens of the new
+corpus's layer-9 calibration folder must be bit-identical to those of the same reader given the rebuilt file explicitly.
+(b) `PublicMolt(<pre-norm export>)` must raise `ValueError` (this reader handles post-norm input only), not read the dictionary with the
+wrong input.
+This checks the format only; the layer-9 dictionary of the old corpus is not compared with a reference forward.
