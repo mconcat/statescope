@@ -7,6 +7,7 @@ name = "statescope"
 version = "0.1.0"
 description = "Per-layer dictionaries for Qwen3.5: a state dictionary of the residual stream and an operation dictionary of the MLP"
 requires-python = ">=3.12"
+license = {text = "MIT"}
 dependencies = ["torch>=2.11", "safetensors>=0.8"]
 
 [project.optional-dependencies]

@@ -46,7 +46,7 @@ def test_no_machine_specific_string_is_committed():
     tracked = subprocess.run(["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True).stdout.split()
     offenders = []
     for rel in tracked:
-        if rel in ("tests/test_repo_rules.py", "devtools/legacy-env-freeze.txt"):
+        if rel in ("tests/test_repo_rules.py", "devtools/legacy-env-freeze.txt", "LICENSE"):   # the licence names the copyright holder
             continue
         text = (REPO / rel).read_text(errors="replace")
         for pattern in FORBIDDEN:
