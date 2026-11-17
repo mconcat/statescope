@@ -33,9 +33,10 @@ def legacy_molt_run(settings: Settings, layer: int, rep: str, steps: int = SHORT
                    "--molt-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096, list(extra))
 
 
-def legacy_vocab_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False, extra: tuple[str, ...] = ()) -> list[str]:
+def legacy_vocab_run(settings: Settings, layer: int, rep: str, steps: int = SHORT_STEPS, trace: bool = False, extra: tuple[str, ...] = (),
+                     hash_batches: bool = False) -> list[str]:
     """state dictionary V0, seed 0 (lane_vocab.sh)"""
     spec = settings.need_legacy_snapshot() / "results" / "mlp_track" / "specs" / "v0.json"
-    head = ["--module", "train.layer_recipe", "--rep", rep] + (["--trace-main"] if trace else [])
+    head = ["--module", "train.layer_recipe", "--rep", rep] + (["--trace-main"] if trace else []) + (["--hash-batches"] if hash_batches else [])
     return head + ["--", "--layer", str(layer), "--mem-gb", str(settings.train_gb), "--vocabs", str(spec), "--vocab-only", "V0s0",
                    "--vocab-export-tokens=", "--"] + _stream_args(settings, layer, steps * 4096, list(extra))

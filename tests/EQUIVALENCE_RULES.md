@@ -148,3 +148,9 @@ after 300 steps of amplification. It is therefore paired with checks that do not
 (step 0, before any update) within 1e-6 relative; (iii) one optimizer step from an identical saved state (a legacy checkpoint) within
 1e-6 relative per tensor. The cause of the A/B difference is looked for and written down.
 **R4.4 Final evaluation.** The numbers the trainer writes at the end (held-out FVU per split and pooled, fold error, dead counts) follow R4.2 / R4.3.
+
+**R4.0 The shared loop, without any dictionary (2026-11-17, before first run).** A legacy run records, for every one of the 300 steps, the
+sha256 of the batch it is about to train on (standardized x, standardized y, the first-position flag and the token ids, as they reach
+`LayerRecipe.pre`); the recording only reads the tensors. The new loop must produce the same 300 x 4 hashes **exactly**, and the same
+per-unit records as the legacy `mix_*.jsonl` (token counts per source, rows used, and the two float statistics of the standardized head)
+**exactly**. Both runs use the same GPU.

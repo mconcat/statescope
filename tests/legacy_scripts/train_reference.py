@@ -27,6 +27,7 @@ def main() -> None:
     ap.add_argument("--module", required=True)
     ap.add_argument("--trace-main", action="store_true")
     ap.add_argument("--rep", default="A", help="only distinguishes repeated runs (separate cache entries)")
+    ap.add_argument("--hash-batches", action="store_true", help="record the sha256 of every training batch in <out>/batches.jsonl (reads the tensors only)")
     a = ap.parse_args(argv[:cut])
     run_dir = os.path.join(a.out, "run")
     module_args = [x.replace("{RUN}", run_dir) for x in argv[cut + 1:]]
@@ -53,8 +54,26 @@ def main() -> None:
             return ns["_main_layer_recipe"]
         LR.edited_main = edited_main
 
+    if a.hash_batches:
+        import hashlib
+
+        import train.layer_recipe as LR
+
+        original_pre = LR.LayerRecipe.pre
+        batch_log = open(os.path.join(a.out, "batches.jsonl"), "w")
+
+        def digest(t):
+            return hashlib.sha256(t.detach().cpu().contiguous().numpy().tobytes()).hexdigest()
+
+        def recording_pre(self, z, ys, zu, step):
+            e = self.cur_extra
+            batch_log.write(json.dumps({"step": int(step), "z": digest(z), "y_std": digest(ys), "pos0": digest(e["p0"]), "tok": digest(e["tok"])}) + "\n")
+            batch_log.flush()
+            return original_pre(self, z, ys, zu, step)
+        LR.LayerRecipe.pre = recording_pre
+
     sys.argv = [a.module] + module_args
-    if a.trace_main and a.module == "train.layer_recipe":
+    if (a.trace_main or a.hash_batches) and a.module == "train.layer_recipe":
         LR.main()               # the imported module (whose edited_main was replaced above), not a second copy run as __main__
     else:
         runpy.run_module(a.module, run_name="__main__", alter_sys=True)
