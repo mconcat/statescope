@@ -251,6 +251,13 @@ other; (b) over the tokens with no differing pair and a reference tensor, max |y
 pass/fail condition: 0 differing pairs and gate values equal to within 1e-5 relative, since the gate's input is computed by the same
 operations.
 
+*Result of the first full run (2026-11-18, added after it; the rule above is unchanged).* The prediction missed by one pair: among
+24 layers x 16,384 tokens x 3,968 transforms, one gate differs (layer 3, pile, token 4027, transform 3816: the new reader's
+pre-activation is 0.68840134 against a threshold of 0.68840033, 1.5e-6 above it relatively, and the reference had it off). Gate values
+elsewhere differ by up to 1.5e-6 relatively, so the two computations of the gate input are not bit-identical (the reference runs 64
+tokens per call, the new reader all tokens of a split), and this pair lies inside that difference. R8.1 likewise: four tokens of 786,432
+have another group set, each with its 24th and 25th group norm within 7.3e-7 of each other relatively.
+
 **R8.4 Post-norm coefficients.** The export does not hold the layer's RMSNorm coefficients that the input transform needs (the config
 names a file by an absolute path on the training machine). The tests rebuild them from the language model as the frozen capture script
 does (`w_eff = (1 + weight.double()).float()`, `eps` of `layers[L].post_attention_layernorm`). Where a copy rebuilt by the original

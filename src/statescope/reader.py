@@ -15,7 +15,8 @@ Two dictionaries per layer L, trained separately:
   PublicMolt             second design: the public penalty form (crosslayer-transcoder, branch MOLT): 3,968 "transforms" of ranks
                          8-128 with a JumpReLU gate, no linear part.
 
-Position 0 of every sequence was dropped in training and evaluation of the first design; drop it when you measure anything with it.
+Position 0 of every sequence was dropped in training of the first design's dictionaries and of the second design's state dictionary;
+drop it when you measure anything with them.
 
     V = StateVocab("layers/L19/vocab", "cuda")
     M = MoltOps("layers/L19/molt", "cuda")

@@ -4,7 +4,9 @@ penalty form), next to the first snapshot and without touching it.
 Two sources, both only read:
 
   --bundle  the extracted training bundle that was shipped to the rented machines for the MLP dictionary (the public trainer's fork, the
-            unmodified public code, capture, data module, loader). Copied whole: it is what trained the checkpoints.
+            unmodified public code, capture, data module, loader). Copied whole. Two bundles were shipped during the training night;
+            the second is frozen. They differ in the driver script, the data module (shard_data.py), the runbook and added GDN files;
+            the model, trainer, loader and export files are identical. Which layers ran from which bundle is not recorded here.
   --source  the original repository, for the state dictionary's launcher and the separately written reader (static import closure,
             as in freeze_legacy.py) and a few side files.
 
