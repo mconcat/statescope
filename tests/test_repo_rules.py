@@ -59,3 +59,14 @@ def test_no_machine_specific_string_is_committed():
                 if (rel, match.group(0)) not in ALLOWED_STRINGS:
                     offenders.append(f"{rel}:{line}: {match.group(0)}")
     assert offenders == []
+
+
+def test_the_two_dictionary_packages_do_not_import_each_other():
+    """tests/new_bridge.py leaves the other dictionary's source out of a training run's cache key; that is only right if this holds"""
+    offenders = []
+    for package, other in (("molt", "vocab"), ("vocab", "molt")):
+        for path in sorted((REPO / "src" / "statescope" / package).rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+                offenders += [f"{path.relative_to(REPO)}: {n}" for n in names if n.startswith(f"statescope.{other}")]
+    assert offenders == []

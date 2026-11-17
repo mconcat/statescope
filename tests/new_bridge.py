@@ -17,19 +17,24 @@ from conftest import REPO, TEST_OUT, Settings
 SCRIPTS = REPO / "tests" / "new_scripts"
 
 
-def _source_digest() -> bytes:
+def _source_digest(exclude: tuple[str, ...]) -> bytes:
+    """sha256 over the package source, leaving out the sub-packages named in `exclude` (ones the script provably does not use)"""
     h = hashlib.sha256()
     for path in sorted((REPO / "src" / "statescope").rglob("*.py")):
+        if path.relative_to(REPO / "src" / "statescope").parts[0] in exclude:
+            continue
         h.update(str(path.relative_to(REPO)).encode())
         h.update(path.read_bytes())
     return h.digest()
 
 
-def run_new(script: str, args: list[str], settings: Settings, timeout_s: int = 3600) -> Path:
-    """Run tests/new_scripts/<script> with `--out <dir>` + args on settings.train_device; returns <dir> (cached). Raises on failure."""
+def run_new(script: str, args: list[str], settings: Settings, timeout_s: int = 3600, exclude: tuple[str, ...] = ()) -> Path:
+    """Run tests/new_scripts/<script> with `--out <dir>` + args on settings.train_device; returns <dir> (cached). Raises on failure.
+    exclude: sub-packages of statescope whose source is left out of the cache key because the script does not import them
+    (tests/test_repo_rules.py checks that the two dictionary packages do not import each other)."""
     script_path = SCRIPTS / script
     key = hashlib.sha256()
-    for part in (_source_digest(), script_path.read_bytes(), json.dumps(args).encode(), settings.train_device.encode()):
+    for part in (_source_digest(exclude), script_path.read_bytes(), json.dumps(args).encode(), settings.train_device.encode()):
         key.update(hashlib.sha256(part).digest())
     out = TEST_OUT / "new" / f"{script_path.stem}-{key.hexdigest()[:16]}"
     if (out / "DONE").is_file():
