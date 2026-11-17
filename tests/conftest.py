@@ -48,6 +48,9 @@ class Settings:
     legacy_snapshot: Path           # frozen copy of the original code
     device: str
     gpu_gb: float
+    train_device: str               # device of the short training runs (one process at a time)
+    train_gb: float                 # their memory cap (the original runs used 16 for the MLP dictionary, 9 for the state dictionary)
+    train_lock: Path | None         # if set, training runs queue on this lock file with flock (a GPU shared with other work)
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
@@ -87,6 +90,9 @@ def settings() -> Settings:
         legacy_snapshot=_path_or_none("STATESCOPE_LEGACY_SNAPSHOT") or REPO / "legacy_snapshot",
         device=os.environ.get("STATESCOPE_DEVICE", "cuda:0"),
         gpu_gb=float(os.environ.get("STATESCOPE_GPU_GB", "12")),
+        train_device=os.environ.get("STATESCOPE_TRAIN_DEVICE", os.environ.get("STATESCOPE_DEVICE", "cuda:0")),
+        train_gb=float(os.environ.get("STATESCOPE_TRAIN_GB", "16")),
+        train_lock=_path_or_none("STATESCOPE_TRAIN_GPU_LOCK"),
     )
 
 
