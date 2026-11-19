@@ -2,10 +2,16 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
+import shutil
 import subprocess
 
+import torch
+
+import statescope.reader
 from conftest import REPO
+from synthetic import write_molt, write_public_molt, write_vocab
 
 SOURCE_DIRS = ("src", "examples", "demo")
 LEGACY_PACKAGES = {"train", "measure", "gpt2", "tools"}
@@ -19,6 +25,9 @@ ALLOWED_STRINGS = {
     ("src/statescope/earlier_design/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
 }
 FORBIDDEN = [r"/home/", r"/mnt/", r"\b10\.42\.\d", r"\b192\.168\.\d", r"\bprocessor\b", r"\bworkstation\b", r"\bmconcat\b"]
+READER = REPO / "src" / "statescope" / "reader.py"
+# everything the single-file reader may import (first component of the module name); nothing of this package is in the list
+READER_IMPORTS = {"__future__", "json", "os", "torch", "safetensors", "yaml"}
 
 
 def _python_files() -> list:
@@ -76,3 +85,52 @@ def test_the_two_dictionary_packages_do_not_import_each_other():
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
                 offenders += [f"{path.relative_to(REPO)}: {n}" for n in names if n.startswith(f"statescope.earlier_design.{other}")]
     assert offenders == []
+
+
+def test_the_reader_imports_only_the_standard_library_torch_safetensors_and_yaml():
+    """The reader is one file that can be copied next to the weights: it imports nothing of this package and no further dependency.
+    Imports inside functions count too."""
+    offenders = []
+    n_imports = 0
+    for node in ast.walk(ast.parse(READER.read_text())):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            names = ["<relative import>"] if node.level else [node.module]
+        else:
+            continue
+        n_imports += len(names)
+        offenders += [f"line {node.lineno}: {name}" for name in names if name.split(".")[0] not in READER_IMPORTS]
+    assert n_imports > 0, "no import found in the reader: this test would pass without checking anything"
+    assert offenders == []
+
+
+def test_a_copy_of_the_reader_file_works_alone_and_gives_identical_outputs(tmp_path):
+    """reader.py copied to another folder and loaded by file path under another module name (as a user who copies it next to the
+    weights would, and as tests/legacy_scripts/capture_reference.py loads it) reads the same dictionaries to the same bits."""
+    copy_path = tmp_path / "elsewhere" / "reader.py"
+    copy_path.parent.mkdir()
+    shutil.copyfile(READER, copy_path)
+    spec = importlib.util.spec_from_file_location("reader_copy_under_test", copy_path)
+    copy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(copy)
+    assert copy.__file__ == str(copy_path) and copy is not statescope.reader
+
+    write_public_molt(tmp_path / "mlp")
+    write_molt(tmp_path / "molt")
+    write_vocab(tmp_path / "state", layer=3, form="bsf", token_rms=True)
+    write_vocab(tmp_path / "vocab", layer=3)
+    x = torch.randn(48, 12, generator=torch.Generator().manual_seed(0))
+    for name, folder in (("PublicMolt", "mlp"), ("MoltOps", "molt")):
+        gate, y = getattr(statescope.reader, name)(str(tmp_path / folder)).forward(x)
+        gate_copy, y_copy = getattr(copy, name)(str(tmp_path / folder)).forward(x)
+        assert int((gate > 0).sum()) > 0
+        assert torch.equal(gate, gate_copy) and torch.equal(y, y_copy), name
+    for folder in ("state", "vocab"):
+        mine, theirs = statescope.reader.StateVocab(str(tmp_path / folder)), copy.StateVocab(str(tmp_path / folder))
+        for site in mine.sites:
+            groups, codes = mine.encode(x, site)
+            groups_copy, codes_copy = theirs.encode(x, site)
+            assert torch.equal(groups, groups_copy) and torch.equal(codes, codes_copy), (folder, site)
+            assert torch.equal(mine.reconstruct(x, site), theirs.reconstruct(x, site)), (folder, site)
+    assert copy.fvu(x, 0.5 * x) == statescope.reader.fvu(x, 0.5 * x)
