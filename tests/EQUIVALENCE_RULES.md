@@ -430,3 +430,56 @@ than the calibration folder's.
 
 Not covered by R10: the capture path on the 4B model (R1.5 compared `capture` with the original's capture on 0.8B only), spliced-in
 loss, trainers, and any demonstration (the line-count demonstration is on 0.8B).
+
+**R10.8 Reading a text with the 4B model (written 2026-11-20, before it was run; reported, with one condition).** `capture` was
+compared with the original's capture on 0.8B only (R1.5). For the 4B set the model card's usage lines are run once as written, on the
+4B model and the published folder: capture of one text at one layer, state reconstruction at both sites, MLP reconstruction. Condition:
+it runs, the shapes are (tokens - 1, 2,560), and the three FVU values are finite and below 1. The values are reported; no record exists
+to compare them with.
+
+## R11. Published config files without the original project's internal names (written 2026-11-20, before the rewrite was made or any test of the rewritten files was run)
+
+Until 2026-11-20 the config files were published as the trainers wrote them (R8.7, R10.6). On 2026-11-20 the owner decided that the
+names of the original, unpublished project inside them are replaced before the repositories are made public. This changes text
+files only. No safetensors file is rewritten.
+
+The published copy of a set is made by `devtools/stage_release2.py`. Its edits are exactly these:
+
+- state dictionary, `cfg.json`: the value of `kind` becomes `state_dictionary` (the original value is the name of the original
+  project's trainer module); the keys `name`, `trainer`, `arm` and `code_md5` are removed (a configuration label, a source file path, a
+  run label, and the md5 of eight source files of the original project by their paths). Every other key and value is unchanged, and
+  the file is written with the original's indentation.
+- MLP dictionary, `config.yaml`: the one line that names the original project's data module (`class_path` of the `data` section) is
+  deleted. Every other byte is the one of the path-free copy the original project made (R8.7, R10.6).
+- `MANIFEST.json` lists the sha256 of the published files and, under `original_sha256`, the sha256 of the two text files before
+  the edit.
+
+The reader accepts a state dictionary only if `kind` is `state_dictionary`.
+
+**R11.1 The edit is the stated one.** For every layer of both sets: the published `cfg.json`, parsed, equals the original, parsed,
+after the stated replacement and removals; the published `config.yaml` equals, byte for byte, the path-free copy without that line;
+the sha256 of the two originals equals the manifest's `original_sha256`.
+
+**R11.2 The tensor files are the tested ones.** The published `weights.safetensors` and `usage.safetensors` of a state dictionary
+are the original export's files (the same file on disk, or the same sha256). For the MLP dictionaries R8.7 (b) and R10.6 (b) stay as
+written.
+
+**R11.3 None of the names is left.** No text file of a published folder (configs, manifest, model card, the 4B list of always-on
+transforms) and no safetensors header (tensor names and metadata) contains one of: `sasa`, `segment_b4`, `B1s0`, `layer_recipe`,
+`molt_stream`, `cache_acts`, `shard_data`, `public_molt`, `code_md5` (letter case ignored).
+
+**R11.4 Reader comparisons.** R8.1-R8.5 and R10.1-R10.5 as written, with one change of what is read: the reference still reads the
+original export (the reference code checks the original `kind`), and the reader of this repository reads the published copy. No
+limit changes.
+
+**R11.5 Reported, not pass/fail.** Whether `demo/line_count.py` on the rewritten published folder writes a result that is
+byte-identical to the result of the run tested under R9 (prediction: identical, since only a string comparison in the reader changes).
+The demonstration's own rule R9 is applied to the new run as written.
+
+## Note on the earlier design (2026-11-20; no rule and no tolerance is changed)
+
+On 2026-11-20 the owner decided that the earlier design's code leaves the main branch before publication and is kept on the branch
+`earlier-design`: `statescope.earlier_design`, `statescope.cli`, `statescope.splice`, the earlier design's reader classes, its release
+folder, its example, and the tests and reference scripts of rules R1-R7 (R1.6 and R1.7 included). On the main branch those rules
+have no tests any more. Their text stays above because R8-R11 cite R0 and limits of R1, and their recorded results stay as they were
+measured. The branch keeps the tests, and its reader reads the earlier design's files and the config files as they were before R11.
