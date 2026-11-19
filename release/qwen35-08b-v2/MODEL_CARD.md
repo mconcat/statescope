@@ -154,9 +154,11 @@ We trained the dictionaries and made the first measurements with research code t
 
 ### State dictionary
 
-A group contains 4 directions; its frame is an orthonormal basis of its write subspace, and its code gives coordinates in that frame multiplied by a per-group scale. Each tied dictionary has 16,384 groups at model width 1024 and activates the 24 groups with the largest written norm at each token. It covers `resid_mid.L` and `resid_post.L` with separate site means and scales.
+One state unit is a group of 4 directions, such as layer 8's group 11586, which holds most of the signal that transform 189 writes at the start of a line. For one token, the group takes the prepared residual vector and computes 4 coordinates, called its code. These coordinates weight the group's directions to give its contribution to the reconstructed residual vector. The group is active when the size of that contribution is among the 24 largest out of 16,384 groups on the token; we add the active groups' contributions to reconstruct the token's residual vector. In our line-break experiment, group 11586's four directions together hold 0.769 of transform 189's swapped-write energy at `resid_post.8`.
 
-For raw residual `x`, site mean `mu_site`, site scale `scale_site` and decoder bias `b_dec`:
+It covers `resid_mid.L` and `resid_post.L` with separate site means and scales. The normalized input `x / rms` is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight.
+
+The formula shows reconstruction from raw residual `x`, site mean `mu_site`, site scale `scale_site` and decoder bias `b_dec`:
 
 ```text
 rms = sqrt(mean(x^2) + eps)                      eps = 1e-6
@@ -166,13 +168,31 @@ active = the k groups with largest norm(c_g)      G=16384, b=4, d=1024, k=24
 x_hat = (mu_site + scale_site * (sum_active c_g Q_g + b_dec)) * rms
 ```
 
-`Q_g` has orthonormal rows. The normalized input `x / rms` is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight. We trained each layer's dictionary on 30,003,200 tokens over 7,325 steps with seed 0, excluding position 0. The state files occupy about 12.0 GiB.
+**Settings**
+
+| setting | value |
+|---|---|
+| Form | Tied |
+| Groups per layer | 16,384 |
+| Directions per group | 4 |
+| Model width | 1024 |
+| Frame | Orthonormal basis of the group's write subspace; `Q_g` has orthonormal rows |
+| Code | Coordinates in the frame multiplied by a per-group scale |
+| Selection | Top-k by written norm |
+| Active groups per token | 24 |
+| Training tokens per layer | 30,003,200 |
+| Training steps per layer | 7,325 |
+| Seed | 0 |
+| Position 0 in training | Excluded |
+| State files | About 12.0 GiB |
 
 ### MLP dictionary
 
-A transform has read and write matrices; its write is its contribution to the MLP output. The dictionary is a sparse mixture of linear transforms, called MOLT. Each transform's JumpReLU gate retains a positive pre-activation above its learned threshold and otherwise returns zero. The read and write matrices are free, with no skip connection, and training uses a tanh sparsity penalty.
+One MLP unit is a transform, such as layer-8 transform 189, which fires on the first token of a line. For one token, it reads the prepared MLP input and computes a score; the transform fires if this score is positive and above its learned threshold, in which case the score becomes its gate value. Its read matrix maps the input to a smaller set of numbers, and its write matrix maps them back to an output vector, multiplied by the gate; when the gate is zero, the transform writes nothing. Transform 189 writes mostly inside state group 11586's frame at `resid_post.8`, carrying the line-start signal described above. We add the active transforms' writes to reconstruct the token's MLP output. The number that fire varies by token; at layer 8, we recorded a mean of 9.1 active transforms per token on the held-out training shard, including position 0.
 
-Each layer has 3,968 transforms in the five rank tiers listed under Conventions. The MLP files occupy about 15.4 GiB. The reader applies RMSNorm to raw `resid_mid`, standardizes each dimension, and restores raw output units:
+The reader applies RMSNorm to raw `resid_mid`, standardizes each dimension, and restores raw output units. This uses the model's learned RMSNorm weight, `w_eff = 1 + weight` of `post_attention_layernorm`, with `eps = 1e-06`.
+
+The formula shows how the gates scale the transforms' writes and how we add them to estimate the MLP output:
 
 ```text
 u = x * rsqrt(mean(x^2) + eps) * w_eff
@@ -183,9 +203,26 @@ y_std = sum over transforms t of g_t * (z V_t) U_t
 y = y_std * sd_out + mu_out
 ```
 
-`V_t` is `(d, rank_t)` and `U_t` is `(rank_t, d)`; `w_eff = 1 + weight` of `post_attention_layernorm`, with `eps = 1e-06`. Hard gates can differ near a floating-point threshold.
+**Settings**
 
-We trained each layer for 58,600 steps of 500 tokens, or 29.3 million tokens, with learning rate 4.0e-05 and position 0 included. The sparsity penalty is 7.5e-05 at layers 0 to 22. Layer 23 used 2.5e-05 in a separate run.
+| setting | value |
+|---|---|
+| Dictionary | Sparse mixture of linear transforms (MOLT) |
+| Transforms per layer | 3,968 |
+| Rank tiers | Five, listed under Conventions |
+| Read and write matrices | Free; `V_t`: `(d, rank_t)`; `U_t`: `(rank_t, d)` |
+| Gate | JumpReLU: retain a positive pre-activation above its learned threshold; otherwise zero |
+| Skip connection | None |
+| Sparsity penalty | tanh |
+| Penalty coefficient | 7.5e-05 at layers 0 to 22; 2.5e-05 at layer 23 |
+| Training per layer | 58,600 steps of 500 tokens; 29.3 million tokens |
+| Learning rate | 4.0e-05 |
+| Position 0 in training | Included |
+| MLP files | About 15.4 GiB |
+
+Hard gates can differ near a floating-point threshold.
+
+The sparsity penalty is 7.5e-05 at layers 0 to 22. Layer 23 used 2.5e-05 in a separate run.
 
 ### Numbers per layer
 

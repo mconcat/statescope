@@ -157,11 +157,11 @@ We trained the dictionaries and made the first measurements with research code t
 
 ### State dictionary
 
-A group contains 4 directions; its frame is an orthonormal basis (perpendicular unit directions) of its write subspace, and its code gives the token's coordinates multiplied by a per-group scale. Each dictionary has 16,384 groups with shared read/write frames, a tied form. It is block-sparse: the 24 groups with the largest written norm are active per token, using 96 of 2,560 dimensions, or 3.75% of model width.
+Group 12112 at `resid_post.13` is one state-dictionary unit: four directions that represent part of a token's residual vector after layer 13. From the normalized input, it computes four numbers, its code: the token's coordinates along those directions multiplied by a scale for the group. The group is "active" when its contribution is among the 24 largest by length on that token. If active, it weights its four directions by those numbers to contribute a vector to the reconstruction. We add the selected contributions and restore the token's original units to reconstruct its residual vector. In our rule experiment, shifting the residual within this group's four directions by the mean difference between rules changed ABA (repeat the first item) to ABB (repeat the second) in 0.45 of prompts.
 
-We trained each layer on 30,003,200 tokens over 7,325 steps, with seed 0. The default of 24 active groups came from comparing 24, 40 and 60 at layers 7, 16, 19 and 23 on one JavaScript ternary expression, which chooses between two values according to a condition.
+The dictionary normalizes each token by its RMS with `eps = 1e-6`, then applies a site mean and scale. The normalized input is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight.
 
-The dictionary normalizes each token by its RMS with `eps = 1e-6`, then applies a site mean and scale. The normalized input is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight. Here `Q` holds orthonormal write frames, `F` maps standardized inputs to codes, and `b_dec` is the decoder bias:
+The formula shows how codes reconstruct a token's residual, with write frames `Q`, code maps `F`, and decoder bias `b_dec`:
 
 ```text
 x_rms = x * rsqrt(mean(x^2) + eps)
@@ -178,13 +178,30 @@ groups      (n, k)
 codes       (n, k, b)
 ```
 
+**Settings**
+
+| Setting | Value |
+|---|---|
+| Groups per layer | 16,384 |
+| Directions per group | 4; an orthonormal frame (perpendicular unit directions) |
+| Model width | 2,560 |
+| Form | Tied, block-sparse; shared read/write frames |
+| Selection | Top-k by written norm; 24 active groups per token |
+| Active dimensions | 96, or 3.75% of model width |
+| Training per layer | 30,003,200 tokens over 7,325 steps |
+| Seed | 0 |
+| Position 0 in training | Dropped; inferred from shared code |
+| File sizes | About 1.25 GiB per layer; about 40.0 GiB (43.0 GB) for all state files |
+
+The default of 24 active groups came from comparing 24, 40 and 60 at layers 7, 16, 19 and 23 on one JavaScript ternary expression, which chooses between two values according to a condition.
+
 ### MLP dictionary
 
-The sparse mixture of linear transforms (MOLT) has 9,920 transforms per layer in the rank tiers listed above. Each transform has free read and write matrices and a JumpReLU gate: its pre-activation passes through when it exceeds both its learned threshold and zero. The dictionary has no linear skip part and uses a hyperbolic tangent (`tanh`) sparsity penalty.
+One MLP-dictionary unit is a transform that reads one token's MLP input and writes a contribution to the reconstructed MLP output; transform 357 at layer 7 ranked first in our hand-traced JavaScript comparison. Its rank of 64 means it maps the normalized and standardized input to 64 intermediate numbers, then maps those numbers to an output vector. It also computes a gate score from the input and "fires" only when that score exceeds both its learned threshold and zero. When it fires, the score scales the vector it writes; when it is off, it writes zero. We sum the transforms' writes and restore output units to reconstruct the MLP output. We recorded a mean of 31.6 firing transforms per token at layer 7 on the held-out training mix.
 
-Training used 58,600 steps of 500 tokens, or 29.3 million tokens, with learning rate 4.0e-05 and penalty 3e-05 at all 32 layers. Layer 16 comes from a separate run of the same recipe; its config matches the others apart from layer index, logger name and standardizer row count. We chose the penalty at layer 16 alone: spliced-in loss was +0.0068 nat at 3e-05, versus +0.0095 nat at 7.5e-05.
+The reader maps raw `resid_mid` through the layer's RMSNorm, using `w_eff = 1 + weight` of `post_attention_layernorm` and `eps = 1e-06`. In the formula, `z` is standardized input, `h_t` is gate pre-activation, `theta_t` its learned threshold, and `V_t`/`U_t` the read/write matrices.
 
-The reader maps raw `resid_mid` through the layer's RMSNorm, using `w_eff = 1 + weight` of `post_attention_layernorm` and `eps = 1e-06`. In the formula, `z` is standardized input, `h_t` is gate pre-activation, `theta_t` its learned threshold, and `V_t`/`U_t` the read/write matrices. Rounding near thresholds can change gate decisions and group selections.
+The formula shows how each gate scales a transform's write and how we reconstruct the MLP output:
 
 ```text
 u = x * rsqrt(mean(x^2) + eps) * w_eff
@@ -196,6 +213,26 @@ y = y_std * sd_out + mu_out
 
 V_t has shape (d, rank_t); U_t has shape (rank_t, d).
 ```
+
+**Settings**
+
+| Setting | Value |
+|---|---|
+| Form | Sparse mixture of linear transforms (MOLT) |
+| Transforms per layer | 9,920 |
+| Rank tiers, largest first | 320 × rank 128; 640 × 64; 1,280 × 32; 2,560 × 16; 5,120 × 8 |
+| Read and write matrices | Free |
+| Gate | JumpReLU; pre-activation passes through when it exceeds both its learned threshold and zero |
+| Skip connection | No linear skip part |
+| Sparsity penalty | Hyperbolic tangent (`tanh`); coefficient 3e-05 at all 32 layers |
+| Training | 58,600 steps of 500 tokens; 29.3 million tokens |
+| Learning rate | 4.0e-05 |
+| Position 0 in training | Included; inferred from shared code |
+| File sizes | About 4.0 GiB per layer; about 128.0 GiB (137.5 GB) for all MLP files |
+
+Layer 16 comes from a separate run of the same recipe; its config matches the others apart from layer index, logger name and standardizer row count. We chose the penalty at layer 16 alone: spliced-in loss was +0.0068 nat at 3e-05, versus +0.0095 nat at 7.5e-05.
+
+Rounding near thresholds can change gate decisions and group selections.
 
 `ALWAYS_ON.json` lists transforms firing on at least 90% of tokens and those firing on 50 to 90%, with each transform's share of summed write energy. Its web-text sample has 128 FineWeb-Edu documents of 512 tokens, giving 65,408 after position 0 is dropped; `training_mix_heldout_counts` covers 65,536 training-mix tokens including position 0. Counts differ at 17 layers.
 
