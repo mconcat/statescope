@@ -237,7 +237,7 @@ The main branch of [mconcat/statescope](https://github.com/mconcat/statescope) c
 
 The earlier design is kept on branch [`earlier-design`](https://github.com/mconcat/statescope/tree/earlier-design) of the same repository. It used an untied state dictionary and an MLP dictionary with 41,484 atoms, called M1w by the original project. That branch keeps the token stream, preparation, both trainers, manifest and gate check, the `statescope` command line, the spliced-in-loss module, its release folder and example, its reader classes (including `MoltOps` for its MLP files), and the tests for rules R1 to R7. Its code reproduces how an earlier, unpublished set was trained; it did not train these weights. Read its files with the reader on that branch.
 
-`tests/EQUIVALENCE_RULES.md` retains the text of R1 to R7 because R8 to R11 cite their limits. Of those earlier rules, only the capture comparison R1.5 still has a test on the main branch. The package no longer installs a `statescope` command and has no `train` extra. Its extras are `model` (transformers and flash-linear-attention) and `dev` (pytest and numpy). The earlier-set comparison under “Spliced-in loss” concerns the original project's dictionaries.
+`tests/EQUIVALENCE_RULES.md` retains the text of R1 to R7 because R8 to R11 cite their limits. Of those earlier rules, only the capture comparison R1.5 still has a test on the main branch. The package no longer installs a `statescope` command and has no `train` extra. Its extras are `model` (transformers, accelerate and flash-linear-attention) and `dev` (pytest and numpy). The earlier-set comparison under “Spliced-in loss” concerns the original project's dictionaries.
 
 ### Config files
 
@@ -311,7 +311,7 @@ Use Python 3.12 or newer. Install the reader with torch, safetensors and PyYAML:
 pip install -e .
 ```
 
-Install transformers and flash-linear-attention for `capture` and the demonstration:
+Install transformers, accelerate and flash-linear-attention for `capture` and the demonstration:
 
 ```sh
 pip install -e '.[model]'

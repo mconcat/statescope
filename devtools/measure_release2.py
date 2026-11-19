@@ -84,15 +84,20 @@ def main() -> None:
     ap.add_argument("--calib-root", required=True, type=Path, help="holds <calib-name><L>/heldout_<split>/")
     ap.add_argument("--calib-name", default="calib_q08_L", help="name of a layer's calibration folder without the layer number")
     ap.add_argument("--layers", type=int, default=24, help="number of layers of the model (24 for 0.8B, 32 for 4B)")
+    ap.add_argument("--first-layer", type=int, default=0, help="measure layers first-layer .. layers-1 only (to split a long run over two processes)")
+    ap.add_argument("--merge", type=Path, nargs="*", default=[], help="no measurement: join the layers of these output files into --out")
     ap.add_argument("--out", type=Path, default=DEST)
     ap.add_argument("--device", default="cuda:0")
     args = ap.parse_args()
     layers = {}
-    for layer in range(args.layers):
+    for part in args.merge:
+        layers.update(json.loads(part.read_text())["layers"])
+    for layer in ([] if args.merge else range(args.first_layer, args.layers)):
         layers[str(layer)] = measure_layer(layer, args.release, args.calib_root / f"{args.calib_name}{layer}", args.device)
         row = layers[str(layer)]
         print(layer, {k: round(v["position_0_dropped"], 4) for k, v in row.items() if k != "tokens_per_split" and isinstance(v, dict)}, flush=True)
         torch.cuda.empty_cache()
+    layers = {key: layers[key] for key in sorted(layers, key=int)}
     out = {"what": "FVU in raw units on all held-out tokens of the original project's four held-out splits per layer, read with statescope.reader",
            "splits": list(HELDOUT_SPLITS), "layers": layers}
     args.out.parent.mkdir(parents=True, exist_ok=True)

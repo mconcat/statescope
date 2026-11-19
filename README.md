@@ -38,7 +38,7 @@ Python 3.12 or newer is required. This command installs the reader with torch, s
 pip install -e .
 ```
 
-This command adds transformers and flash-linear-attention, which `capture` and the demonstration need:
+This command adds transformers, accelerate and flash-linear-attention, which `capture` and the demonstration need:
 
 ```sh
 pip install -e '.[model]'

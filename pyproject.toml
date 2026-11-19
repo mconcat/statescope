@@ -12,7 +12,7 @@ dependencies = ["torch>=2.11", "safetensors>=0.8", "pyyaml"]
 
 [project.optional-dependencies]
 # capture() and everything that runs the language model
-model = ["transformers>=5.20", "flash-linear-attention>=0.6"]
+model = ["transformers>=5.20", "accelerate", "flash-linear-attention>=0.6"]   # accelerate: loading the model onto a device with device_map
 dev = ["pytest", "numpy"]
 
 [tool.setuptools.packages.find]
