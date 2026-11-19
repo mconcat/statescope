@@ -27,10 +27,7 @@ import os
 
 import torch
 
-from statescope.config import MIX_08B, MODELS, DataPaths, MixSpec
-
-# the training mixture and reserved rows of each model; a model without an entry cannot be calibrated or trained from the command line
-MIXES: dict[str, MixSpec] = {"qwen3.5-0.8b": MIX_08B}
+from statescope.config import MIXES, MODELS, DataPaths, MixSpec
 
 
 def _add_data_paths(parser: argparse.ArgumentParser) -> None:
