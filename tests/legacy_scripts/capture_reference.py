@@ -6,6 +6,7 @@ The computation is part (c) of the original measure/mlp_track/release_parity.py:
 Writes <out>/info.json with the differences.
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -20,9 +21,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--reader", required=True, help="path of the reader.py under test")
+    ap.add_argument("--reader-sha256", required=True, help="sha256 of that file: makes the cached result belong to this version of the reader")
     ap.add_argument("--model", required=True, help="legacy model name, e.g. qwen3.5-0.8b")
     ap.add_argument("--layers", required=True, help="comma-separated")
     a = ap.parse_args()
+    with open(a.reader, "rb") as f:
+        if hashlib.sha256(f.read()).hexdigest() != a.reader_sha256:
+            raise ValueError(f"{a.reader} is not the file the caller hashed")
     cap_gpu()
 
     from measure.mlp_track.release_parity import TEXT

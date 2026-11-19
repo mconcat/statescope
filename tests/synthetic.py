@@ -9,44 +9,16 @@ import yaml
 from safetensors.torch import save_file
 
 
-def write_molt(path: Path, d: int = 12, atoms_by_rank: dict[int, int] | None = None, seed: int = 0) -> dict[str, torch.Tensor]:
-    """an MLP dictionary export with random weights; returns the tensors written"""
-    atoms_by_rank = atoms_by_rank or {1: 5, 2: 4, 4: 3}
-    g = torch.Generator().manual_seed(seed)
-    n_atoms = sum(atoms_by_rank.values())
-    order = torch.randperm(n_atoms, generator=g)                     # atom ids are interleaved across the rank tiers
-    t: dict[str, torch.Tensor] = {
-        "calib_norm_w_eff": 1 + 0.1 * torch.randn(d, generator=g), "calib_mu_u": 0.1 * torch.randn(d, generator=g),
-        "calib_sd_u": 0.5 + torch.rand(d, generator=g), "calib_mu_y": 0.1 * torch.randn(d, generator=g), "calib_sd_y": 0.5 + torch.rand(d, generator=g),
-        "e": torch.randn(n_atoms, d, generator=g), "b": 0.5 * torch.randn(n_atoms, generator=g),
-        "W_skip": 0.1 * torch.randn(d, d, generator=g), "b_dec": 0.1 * torch.randn(d, generator=g),
-        "score_div": 0.5 + torch.rand(n_atoms, generator=g), "thr_atom": 0.5 * torch.rand(n_atoms, generator=g),
-    }
-    start = 0
-    for r, n_r in atoms_by_rank.items():
-        t[f"idx_r{r}"] = order[start:start + n_r].sort().values
-        t[f"U_r{r}"] = torch.randn(n_r, r, d, generator=g)
-        t[f"V_r{r}"] = torch.randn(n_r, r, d, generator=g)
-        t[f"s_r{r}"] = torch.randn(n_r, r, generator=g)
-        start += n_r
-    path.mkdir(parents=True, exist_ok=True)
-    save_file(t, str(path / "weights.safetensors"))
-    (path / "cfg.json").write_text(json.dumps({"d": d, "n_atoms": n_atoms, "rule_cfg": {"rule": "q"}, "rank_hist": {str(r): n for r, n in atoms_by_rank.items()}}))
-    (path / "input.json").write_text(json.dumps({"input": "u", "eps": 1e-6}))
-    return t
+RMS_EPS = 1e-6         # eps of the state dictionary's per-token RMS input
 
 
-RMS_EPS = 1e-6      # the published state dictionaries' cfg "rms_eps"
-
-
-def write_vocab(path: Path, layer: int = 3, d: int = 12, groups: int = 10, b: int = 2, k: int = 3, seed: int = 0, orthonormal_tied: bool = False,
-                *, form: str = "comp", token_rms: bool = False) -> dict[str, torch.Tensor]:
-    """a state dictionary export with random weights; returns the tensors written (under the names they have in the file).
+def write_vocab(path: Path, layer: int = 3, d: int = 12, groups: int = 10, b: int = 2, k: int = 3, seed: int = 0,
+                orthonormal_tied: bool = False) -> dict[str, torch.Tensor]:
+    """a state dictionary export with random weights, in the published form (cfg "form": "bsf", "input": "token_rms"; the site
+    statistics stored as site_mu_rms / site_scale_rms); returns the tensors written (under the names they have in the file).
     orthonormal_tied: D has orthonormal rows spanning mutually orthogonal group subspaces and E = D (needs groups * b <= d); then a
-                      signal lying in k groups is reconstructed exactly.
-    form:             the cfg "form" string: "comp" (earlier design, untied) or "bsf" (published set, tied). Only the string changes.
-    token_rms:        the published set's input convention: cfg "input": "token_rms" and "rms_eps", and the site statistics are
-                      stored as site_mu_rms / site_scale_rms. Off: no "input" key in the cfg, as in the earlier design's exports."""
+                      signal lying in k groups is reconstructed exactly. Off: random D and E, which the reader must still read
+                      by its formulas (it orthonormalises the frames itself)."""
     g = torch.Generator().manual_seed(seed)
     if orthonormal_tied:
         basis = torch.linalg.qr(torch.randn(d, d, generator=g).double())[0].float()
@@ -54,12 +26,10 @@ def write_vocab(path: Path, layer: int = 3, d: int = 12, groups: int = 10, b: in
         E = D.clone()
     else:
         D, E = torch.randn(groups, b, d, generator=g), torch.randn(groups, b, d, generator=g)
-    stats = "_rms" if token_rms else ""
-    t = {"D": D, "E": E, f"site_mu{stats}": 0.1 * torch.randn(2, d, generator=g), f"site_scale{stats}": 0.5 + torch.rand(2, generator=g),
+    t = {"D": D, "E": E, "site_mu_rms": 0.1 * torch.randn(2, d, generator=g), "site_scale_rms": 0.5 + torch.rand(2, generator=g),
          "b_dec": 0.1 * torch.randn(d, generator=g)}
-    cfg: dict = {"kind": "sasa_proper_segment", "gate": "topk", "form": form, "k_topk": k, "sites": [f"resid_mid.{layer}", f"resid_post.{layer}"]}
-    if token_rms:
-        cfg.update({"input": "token_rms", "rms_eps": RMS_EPS})
+    cfg: dict = {"kind": "state_dictionary", "gate": "topk", "form": "bsf", "input": "token_rms", "rms_eps": RMS_EPS, "k_topk": k,
+                 "sites": [f"resid_mid.{layer}", f"resid_post.{layer}"]}
     path.mkdir(parents=True, exist_ok=True)
     save_file(t, str(path / "weights.safetensors"))
     (path / "cfg.json").write_text(json.dumps(cfg))

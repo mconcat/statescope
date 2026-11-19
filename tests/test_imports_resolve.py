@@ -1,9 +1,8 @@
-"""Every `statescope` import written anywhere in the repository resolves, and the command line keeps its entry point.
+"""Every `statescope` import written anywhere in the repository resolves.
 
 Guard for moving modules inside the package: an import left on an old path fails here, also when it sits inside a function that no
-other test calls (the command line imports its modules inside the subcommands) or in a script that is only run by hand (demo/,
-examples/, devtools/, tests/new_scripts/). The files are parsed, never executed; only the `statescope` modules they name are imported.
-CPU only, no private data.
+other test calls or in a script that is only run by hand (demo/, devtools/). The files are parsed, never executed; only the
+`statescope` modules they name are imported. CPU only, no private data.
 """
 from __future__ import annotations
 
@@ -11,18 +10,14 @@ import ast
 import importlib
 import importlib.util
 import sys
-import tomllib
 from pathlib import Path
-
-import pytest
 
 from conftest import REPO
 
 PACKAGE = "statescope"
 PACKAGE_DIR = REPO / "src" / PACKAGE
-SCANNED_DIRS = ("src", "demo", "examples", "devtools", "tests")
+SCANNED_DIRS = ("src", "demo", "devtools", "tests")
 NOT_SCANNED = REPO / "tests" / "legacy_scripts"      # these run with the frozen original code on the path, without this package
-SUBCOMMANDS = ("verify", "calibrate", "fixedmap", "train-vocab", "train-molt", "foldcheck", "splice")
 
 
 def _scanned_files() -> list[Path]:
@@ -102,7 +97,7 @@ def test_the_checker_reports_a_missing_module_and_a_missing_name():
 
 def test_every_statescope_import_in_the_repository_resolves():
     files = _scanned_files()
-    assert len(files) > 50, "the scan found too few files to be looking at the repository"
+    assert len(files) > 20, "the scan found too few files to be looking at the repository"
     problems = []
     for path in files:
         problems += unresolved_imports(path.read_text(), str(path.relative_to(REPO)))
@@ -122,22 +117,3 @@ def test_every_source_folder_of_the_package_is_a_package():
     folders = sorted({path.parent for path in PACKAGE_DIR.rglob("*.py")})
     assert PACKAGE_DIR in folders
     assert [str(folder.relative_to(REPO)) for folder in folders if not (folder / "__init__.py").is_file()] == []
-
-
-def test_the_console_script_still_points_at_the_command_line():
-    """the installed `statescope` command was generated from this entry; moving the function would break it until a reinstall"""
-    from statescope.cli import main
-    with open(REPO / "pyproject.toml", "rb") as f:
-        scripts = tomllib.load(f)["project"]["scripts"]
-    assert scripts == {"statescope": "statescope.cli:main"}
-    assert callable(main)
-
-
-@pytest.mark.parametrize("subcommand", SUBCOMMANDS)
-def test_every_subcommand_answers_help(subcommand: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
-    from statescope.cli import main
-    monkeypatch.setattr(sys, "argv", ["statescope", subcommand, "--help"])
-    with pytest.raises(SystemExit) as exit_info:
-        main()
-    assert exit_info.value.code == 0
-    assert f"statescope {subcommand}" in capsys.readouterr().out

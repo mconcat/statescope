@@ -11,18 +11,15 @@ import torch
 
 import statescope.reader
 from conftest import REPO
-from synthetic import write_molt, write_public_molt, write_vocab
+from synthetic import write_public_molt, write_vocab
 
-SOURCE_DIRS = ("src", "examples", "demo")
+SOURCE_DIRS = ("src", "demo")
 LEGACY_PACKAGES = {"train", "measure", "gpt2", "tools"}
 # `except` clauses that are allowed, each for a stated reason. Everything else in the package must let errors propagate.
-ALLOWED_EXCEPT = {
-    ("src/statescope/lm.py", "_Reached"),     # control flow: the hook ends the forward pass once both tensors are captured
-}
+ALLOWED_EXCEPT: set[tuple[str, str]] = set()
 # machine-specific strings that must not be committed
 # (file, matched text) pairs that are allowed, each for a stated reason
 ALLOWED_STRINGS = {
-    ("src/statescope/earlier_design/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
     ("README.md", "mconcat"),                                     # the public address of the weights repository
     ("release/qwen35-08b-v2/MODEL_CARD.md", "mconcat"),           # the public address of the code repository
 }
@@ -72,23 +69,6 @@ def test_no_machine_specific_string_is_committed():
     assert offenders == []
 
 
-def test_the_two_dictionary_packages_do_not_import_each_other():
-    """The two trainers of the earlier design stay independent of each other.
-
-    This rule was first needed by the cache keys of tests/new_bridge.py, which left the other dictionary's source out of a training
-    run's key. Since both packages moved under earlier_design/ the `exclude` arguments match nothing and every key covers all of
-    src/statescope, so the keys no longer depend on this. The independence itself is kept as a rule of the layout."""
-    offenders = []
-    for package, other in (("molt", "vocab"), ("vocab", "molt")):
-        files = sorted((REPO / "src" / "statescope" / "earlier_design" / package).rglob("*.py"))
-        assert files != [], f"no source files found for the package {package}: this test would pass without checking anything"
-        for path in files:
-            for node in ast.walk(ast.parse(path.read_text())):
-                names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
-                offenders += [f"{path.relative_to(REPO)}: {n}" for n in names if n.startswith(f"statescope.earlier_design.{other}")]
-    assert offenders == []
-
-
 def test_the_reader_imports_only_the_standard_library_torch_safetensors_and_yaml():
     """The reader is one file that can be copied next to the weights: it imports nothing of this package and no further dependency.
     Imports inside functions count too."""
@@ -119,20 +99,16 @@ def test_a_copy_of_the_reader_file_works_alone_and_gives_identical_outputs(tmp_p
     assert copy.__file__ == str(copy_path) and copy is not statescope.reader
 
     write_public_molt(tmp_path / "mlp")
-    write_molt(tmp_path / "molt")
-    write_vocab(tmp_path / "state", layer=3, form="bsf", token_rms=True)
-    write_vocab(tmp_path / "vocab", layer=3)
+    write_vocab(tmp_path / "state", layer=3)
     x = torch.randn(48, 12, generator=torch.Generator().manual_seed(0))
-    for name, folder in (("PublicMolt", "mlp"), ("MoltOps", "molt")):
-        gate, y = getattr(statescope.reader, name)(str(tmp_path / folder)).forward(x)
-        gate_copy, y_copy = getattr(copy, name)(str(tmp_path / folder)).forward(x)
-        assert int((gate > 0).sum()) > 0
-        assert torch.equal(gate, gate_copy) and torch.equal(y, y_copy), name
-    for folder in ("state", "vocab"):
-        mine, theirs = statescope.reader.StateVocab(str(tmp_path / folder)), copy.StateVocab(str(tmp_path / folder))
-        for site in mine.sites:
-            groups, codes = mine.encode(x, site)
-            groups_copy, codes_copy = theirs.encode(x, site)
-            assert torch.equal(groups, groups_copy) and torch.equal(codes, codes_copy), (folder, site)
-            assert torch.equal(mine.reconstruct(x, site), theirs.reconstruct(x, site)), (folder, site)
+    gate, y = statescope.reader.PublicMolt(str(tmp_path / "mlp")).forward(x)
+    gate_copy, y_copy = copy.PublicMolt(str(tmp_path / "mlp")).forward(x)
+    assert int((gate > 0).sum()) > 0
+    assert torch.equal(gate, gate_copy) and torch.equal(y, y_copy)
+    mine, theirs = statescope.reader.StateVocab(str(tmp_path / "state")), copy.StateVocab(str(tmp_path / "state"))
+    for site in mine.sites:
+        groups, codes = mine.encode(x, site)
+        groups_copy, codes_copy = theirs.encode(x, site)
+        assert torch.equal(groups, groups_copy) and torch.equal(codes, codes_copy), site
+        assert torch.equal(mine.reconstruct(x, site), theirs.reconstruct(x, site)), site
     assert copy.fvu(x, 0.5 * x) == statescope.reader.fvu(x, 0.5 * x)

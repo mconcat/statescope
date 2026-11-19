@@ -481,5 +481,7 @@ The demonstration's own rule R9 is applied to the new run as written.
 On 2026-11-20 the owner decided that the earlier design's code leaves the main branch before publication and is kept on the branch
 `earlier-design`: `statescope.earlier_design`, `statescope.cli`, `statescope.splice`, the earlier design's reader classes, its release
 folder, its example, and the tests and reference scripts of rules R1-R7 (R1.6 and R1.7 included). On the main branch those rules
-have no tests any more. Their text stays above because R8-R11 cite R0 and limits of R1, and their recorded results stay as they were
-measured. The branch keeps the tests, and its reader reads the earlier design's files and the config files as they were before R11.
+have no tests any more, with one exception: the capture comparison of R1.5 stays, because `capture` is part of the published reader.
+(Its reference run now also takes the sha256 of the reader file as an argument, so that a changed reader is compared anew.) The text
+of R1-R7 stays above because R8-R11 cite R0 and limits of R1, and the recorded results stay as they were measured. The branch keeps
+the tests, and its reader reads the earlier design's files and the config files as they were before R11.

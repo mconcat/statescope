@@ -29,9 +29,10 @@ RECORDED_ENERGY_FRACTION = 0.769       # results/demo_line_count/s5.json of the 
 
 
 def _reference(settings: Settings, run: str) -> Path:
-    release = settings.need_release2()
-    args = ["--mlp8-dir", str(release / "mlp" / "L8"), "--mlp9-dir", str(release / "mlp" / "L9"),
-            "--vocab8-dir", str(release / "state" / "L8"), "--vocab9-dir", str(release / "state" / "L9"), "--run", run]
+    """the original harness on the original project's files (R11.4): the path-free copies of the two MLP dictionaries and the
+    original exports of the two state dictionaries, which hold the same tensors as the published folders"""
+    args = ["--mlp8-dir", str(settings.mlp_copy_08b_dir(8)), "--mlp9-dir", str(settings.mlp_copy_08b_dir(9)),
+            "--vocab8-dir", str(settings.vocab2_dir(8)), "--vocab9-dir", str(settings.vocab2_dir(9)), "--run", run]
     return run_legacy("demo_reference.py", args, settings, snapshot=settings.need_snapshot3())
 
 

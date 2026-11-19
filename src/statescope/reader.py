@@ -1,37 +1,29 @@
 """Reader for the per-layer dictionaries of a Qwen3.5 model. Self-contained: needs torch and safetensors (transformers only for `capture`
 and `write_post_norm`, PyYAML only for `PublicMolt`).
 
-This file imports nothing else from the package, so it can be copied next to the checkpoints and used on its own.
-
-It reads two sets of dictionaries. The README calls them the "published set" and the "earlier design", and so does this file;
-tests/EQUIVALENCE_RULES.md calls them the second design and the first design.
+This file imports nothing else from the package, so it can be copied next to the weights and used on its own.
 
 Two dictionaries per layer L, trained separately:
 
-  StateVocab             the residual stream at two sites of the layer,
-                           resid_mid.L   the input of the MLP sub-block (what layers[L].post_attention_layernorm receives)
-                           resid_post.L  the output of the layer (resid_mid.L + MLP output)
-                         groups of `b` directions; the `k` groups with the largest written norm are active per token.
-                         Reads both forms: tied ("bsf", published set, per-token RMS input) and untied ("comp", earlier design;
-                         its folder is named "vocab").
-  the MLP of the layer as a sum of gated low-rank maps, x = resid_mid.L (raw)  ->  y ~ MLP output (raw), in one of two forms:
-  PublicMolt             published set: the public penalty form (crosslayer-transcoder, branch MOLT): 3,968 "transforms" of ranks
-                         8-128 with a JumpReLU gate, no linear part.
-  MoltOps     ("molt")   earlier design: 41,484 "atoms" of ranks 1-16, a threshold gate per atom, plus a fixed linear part.
+  StateVocab     the residual stream at two sites of the layer,
+                   resid_mid.L   the input of the MLP sub-block (what layers[L].post_attention_layernorm receives)
+                   resid_post.L  the output of the layer (resid_mid.L + MLP output)
+                 groups of `b` directions with tied orthonormal frames; the `k` groups with the largest written norm are active per
+                 token. The dictionary reads the residual divided by its own RMS per token.
+  PublicMolt     the MLP of the layer as a sum of gated low-rank maps, x = resid_mid.L (raw) -> y ~ MLP output (raw), in the public
+                 penalty form (crosslayer-transcoder, branch MOLT): "transforms" of ranks 8-128 with a JumpReLU gate, no linear part.
 
 Sections of this file, in this order:
 
-  1. Shared helpers                       Device, fvu, _qr_rows
-  2. The language model                   decoder_layers, capture
-  3. State dictionary, both designs       StateVocab
-  4. Published set, MLP dictionary        PublicMolt, write_post_norm
-  5. Earlier design, MLP dictionary       MoltOps
+  1. Shared helpers          Device, fvu, _qr_rows
+  2. The language model      decoder_layers, capture
+  3. State dictionary        StateVocab
+  4. MLP dictionary          PublicMolt, write_post_norm
 
-Position 0 of every sequence was dropped in training of the earlier design's dictionaries and of the published set's state dictionary;
-the published set's MLP dictionary (PublicMolt) was trained with position 0 included. Drop position 0 when you measure anything
-that involves a dictionary trained without it.
+Position 0 of every sequence was dropped in training of the state dictionary; the MLP dictionary was trained with position 0
+included. Drop position 0 when you measure anything that involves the state dictionary (`capture` drops it).
 
-Published set (folders state/L<L> and mlp/L<L>, <L> = layer index without padding):
+Folders state/L<L> and mlp/L<L>, <L> = layer index without padding:
 
     V = StateVocab("state/L9", "cuda")
     M = PublicMolt("mlp/L9", "cuda")
@@ -40,17 +32,8 @@ Published set (folders state/L<L> and mlp/L<L>, <L> = layer index without paddin
     x_hat = V.reconstruct(acts["resid_post"], "resid_post.9")      # encode, then decode with each token's own RMS
     g, y_hat = M.forward(acts["resid_mid"])
 
-Earlier design (folders layers/L<LL>/vocab and layers/L<LL>/molt, <LL> = layer index with two digits):
-
-    V = StateVocab("layers/L19/vocab", "cuda")
-    M = MoltOps("layers/L19/molt", "cuda")
-    acts = capture(model, 19, input_ids)                 # {"resid_mid", "mlp_out", "resid_post"}, each (tokens, d), position 0 dropped
-    groups, codes = V.encode(acts["resid_post"], "resid_post.19")
-    x_hat = V.decode(groups, codes, "resid_post.19")
-    a, y_hat = M.forward(acts["resid_mid"])
-
-Shapes in comments: n tokens, d model width, G groups, b directions per group, k active groups, T atoms (MoltOps) or transforms
-(PublicMolt), r the rank of one atom or transform.
+Shapes in comments: n tokens, d model width, G groups, b directions per group, k active groups, T transforms, r the rank of one
+transform.
 """
 from __future__ import annotations
 
@@ -113,23 +96,20 @@ def capture(model: torch.nn.Module, layer: int, input_ids: torch.Tensor, attenti
 
 
 # =================================================================================================================================
-# 3. State dictionary, both designs
+# 3. State dictionary
 # =================================================================================================================================
 
 class StateVocab:
     """State dictionary of one layer.
 
-    A site's activation x is standardized, xt = (x - mu_site) / scale_site - b_dec, and written as a sum over the active groups g of
-    c_g Q_g, where Q_g (b, d) is an orthonormal frame of the group's write subspace and c_g (b,) its code. Active = the k groups with
-    the largest |c_g| (= the norm of what the group writes).
-
-    A dictionary with cfg "input": "token_rms" (the tied form of the published set) reads the residual divided by its own size:
-    x is replaced by x * rsqrt(mean(x^2) + eps) before the line above. Its reconstructions are then in those units, and the raw
-    residual is the reconstruction times the token's own sqrt(mean(x^2) + eps): pass `rms=V.token_rms(x)` to `decode`, or call
-    `reconstruct`, which does both steps.
+    A site's activation x is first divided by its own size, x * rsqrt(mean(x^2) + eps), then standardized,
+    xt = (x - mu_site) / scale_site - b_dec, and written as a sum over the active groups g of c_g Q_g, where Q_g (b, d) is an
+    orthonormal frame of the group's write subspace and c_g (b,) its code. Active = the k groups with the largest |c_g| (= the norm
+    of what the group writes). Reconstructions are in the units of the normalised residual; the raw residual is the reconstruction
+    times the token's own sqrt(mean(x^2) + eps): pass `rms=V.token_rms(x)` to `decode`, or call `reconstruct`, which does both steps.
 
       sites            ["resid_mid.L", "resid_post.L"]
-      G, b, d, k       groups, directions per group, model width, active groups per token  (0.8B release: 16384, 4, 1024, 24)
+      G, b, d, k       groups, directions per group, model width, active groups per token  (0.8B set: 16384, 4, 1024, 24)
       Q                (G, b, d) write frames, orthonormal rows
       F                (G, b, d) code functionals: c_g = F_g xt
     """
@@ -137,39 +117,32 @@ class StateVocab:
     def __init__(self, path: str, device: Device = "cpu") -> None:
         with open(os.path.join(path, "cfg.json")) as f:
             cfg = json.load(f)
-        if (cfg["kind"], cfg["gate"]) != ("sasa_proper_segment", "topk") or cfg["form"] not in ("comp", "bsf"):
-            raise ValueError(f"{path}: not a top-k state vocabulary export ({cfg['kind']}, {cfg['gate']}, {cfg['form']})")
-        if cfg.get("input", "site") not in ("site", "token_rms"):
-            raise ValueError(f"{path}: unknown input convention {cfg['input']!r}")
+        if (cfg["kind"], cfg["gate"], cfg["form"], cfg["input"]) != ("state_dictionary", "topk", "bsf", "token_rms"):
+            raise ValueError(f"{path}: not a state dictionary this reader handles ({cfg['kind']}, {cfg['gate']}, {cfg['form']}, {cfg['input']})")
         weights = load_file(os.path.join(path, "weights.safetensors"))
         self.cfg: dict = cfg
         self.device: Device = device
         self.sites: list[str] = list(cfg["sites"])
         self.k: int = int(cfg["k_topk"])
-        self.rms_input: bool = cfg.get("input", "site") == "token_rms"            # the dictionary reads x / rms(x), not x
-        self.rms_eps: float = float(cfg["rms_eps"]) if self.rms_input else 0.0
-        stats = "_rms" if self.rms_input else ""                                  # statistics of the normalised residual have their own names
-        D = weights["D"].float().to(device)                                       # (G, b, d) decoder rows as trained (comp: not orthonormal)
+        self.rms_eps: float = float(cfg["rms_eps"])
+        D = weights["D"].float().to(device)                                       # (G, b, d) decoder rows as trained
         self.G, self.b, self.d = D.shape
-        self.mu: torch.Tensor = weights[f"site_mu{stats}"].float().to(device)     # (sites, d)
-        self.scale: torch.Tensor = weights[f"site_scale{stats}"].float().to(device)   # (sites,)
+        self.mu: torch.Tensor = weights["site_mu_rms"].float().to(device)         # (sites, d) statistics of the normalised residual
+        self.scale: torch.Tensor = weights["site_scale_rms"].float().to(device)   # (sites,)
         self.b_dec: torch.Tensor = weights["b_dec"].float().to(device)            # (d,)
         self.Q, R = _qr_rows(D)                                                   # D_g = R_g Q_g
         self.F: torch.Tensor = torch.einsum("grs,grd->gsd", R, weights["E"].float().to(device)).contiguous()   # c_g = (E_g xt) R_g = F_g xt
         del D, R
 
-    def token_rms(self, x: torch.Tensor) -> torch.Tensor | None:
-        """x (n, d) raw -> (n, 1) sqrt(mean(x^2) + eps) of each token, or None for a dictionary that reads the raw residual"""
-        if not self.rms_input:
-            return None
+    def token_rms(self, x: torch.Tensor) -> torch.Tensor:
+        """x (n, d) raw -> (n, 1) sqrt(mean(x^2) + eps) of each token"""
         return torch.sqrt(x.to(self.device).float().pow(2).mean(-1, keepdim=True) + self.rms_eps)
 
     def standardize(self, x: torch.Tensor, site: str) -> torch.Tensor:
-        """x (n, d) raw activations of `site` -> xt (n, d) in the dictionary's units (first x / rms(x) if it reads per-token RMS input)"""
+        """x (n, d) raw activations of `site` -> xt (n, d) in the dictionary's units: x / rms(x), then the site's mean and scale"""
         i = self.sites.index(site)
         x = x.to(self.device).float()
-        if self.rms_input:
-            x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.rms_eps)
+        x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.rms_eps)
         return (x - self.mu[i]) / self.scale[i] - self.b_dec
 
     @torch.no_grad()
@@ -186,40 +159,30 @@ class StateVocab:
         return torch.cat(groups), torch.cat(codes)
 
     @torch.no_grad()
-    def decode(self, groups: torch.Tensor, codes: torch.Tensor, site: str, chunk: int = 1024, rms: torch.Tensor | None = None) -> torch.Tensor:
+    def decode(self, groups: torch.Tensor, codes: torch.Tensor, site: str, rms: torch.Tensor, chunk: int = 1024) -> torch.Tensor:
         """(n, k), (n, k, b) -> reconstruction of the raw activation (n, d). Edit `codes` (or drop groups) before calling to steer.
-        A dictionary with per-token RMS input needs `rms` = token_rms(x) (n, 1) of the tokens that were encoded."""
+        `rms` = token_rms(x) (n, 1) of the tokens that were encoded."""
         i = self.sites.index(site)
         xt = torch.cat([torch.einsum("nkb,nkbd->nd", codes[s:s + chunk], self.Q[groups[s:s + chunk]]) for s in range(0, groups.shape[0], chunk)])
-        x_hat = self.mu[i] + self.scale[i] * (xt + self.b_dec)
-        if not self.rms_input:
-            return x_hat
-        if rms is None:
-            raise ValueError("this dictionary reads x / rms(x): decode needs rms=token_rms(x) to return the raw activation")
-        return x_hat * rms
+        return (self.mu[i] + self.scale[i] * (xt + self.b_dec)) * rms
 
     def reconstruct(self, x: torch.Tensor, site: str) -> torch.Tensor:
         """x (n, d) raw -> its reconstruction (n, d) in raw units: encode, then decode"""
         groups, codes = self.encode(x, site)
         return self.decode(groups, codes, site, rms=self.token_rms(x))
 
-    def group_write(self, group: int, code: torch.Tensor, site: str, rms: torch.Tensor | None = None) -> torch.Tensor:
-        """what one group with code (b,) adds to the raw activation of `site` (no mean, no bias): scale_site * code @ Q_group,
-        times the token's `rms` for a dictionary with per-token RMS input"""
-        write = self.scale[self.sites.index(site)] * (code.to(self.device).float() @ self.Q[group])
-        if not self.rms_input:
-            return write
-        if rms is None:
-            raise ValueError("this dictionary reads x / rms(x): group_write needs the token's rms to return a raw write")
-        return write * rms
+    def group_write(self, group: int, code: torch.Tensor, site: str, rms: torch.Tensor) -> torch.Tensor:
+        """what one group with code (b,) adds to the raw activation of `site` (no mean, no bias): scale_site * code @ Q_group, times
+        the token's `rms`"""
+        return self.scale[self.sites.index(site)] * (code.to(self.device).float() @ self.Q[group]) * rms
 
 
 # =================================================================================================================================
-# 4. Published set, MLP dictionary
+# 4. MLP dictionary
 # =================================================================================================================================
 
 class PublicMolt:
-    """Operation dictionary of one layer's MLP in the public penalty form (crosslayer-transcoder, branch MOLT; published set).
+    """Operation dictionary of one layer's MLP in the public penalty form (crosslayer-transcoder, branch MOLT).
 
       u = x * rsqrt(mean(x^2) + eps) * w_eff          the layer's own RMSNorm on raw resid_mid x
       z = (u - mu_in) / sd_in                         per-dimension statistics kept by the trainer
@@ -228,7 +191,8 @@ class PublicMolt:
       y = y_std * sd_out + mu_out                                                              ~ raw MLP output
 
     Transforms are stored by rank tier, largest rank first (0.8B: ranks 128, 64, 32, 16, 8 with 128, 256, 512, 1024, 2048
-    transforms). `rank` (T,) gives each transform's rank. The gate is a hard threshold, with the same rounding edge as MoltOps.
+    transforms). `rank` (T,) gives each transform's rank. The gate is a hard threshold: a pre-activation within rounding distance
+    of its threshold can come out on in one implementation and off in another.
 
     The export folder holds the trainer's state dict (`weights.safetensors`) and its config (`config.yaml`). The RMSNorm coefficients
     (w_eff, eps) are not part of the state dict: they are read from `post_norm`, by default `postnorm.safetensors` in the export
@@ -327,96 +291,3 @@ def write_post_norm(model: torch.nn.Module, layer: int, path: str) -> None:
     norm = decoder_layers(model)[layer].post_attention_layernorm
     save_file({"w_eff": (1.0 + norm.weight.detach().double()).float().cpu().contiguous()}, path,
               metadata={"eps": repr(float(norm.eps)), "definition": f"u = x * rsqrt(mean(x^2) + eps) * w_eff  (layer {layer} post_attention_layernorm)"})
-
-
-# =================================================================================================================================
-# 5. Earlier design, MLP dictionary
-# =================================================================================================================================
-
-class MoltOps:
-    """Operation dictionary of one layer's MLP in the earlier design's form.
-
-      u = x * rsqrt(mean(x^2) + eps) * w_eff          the layer's own RMSNorm on raw resid_mid x
-      z = (u - mu_u) / sd_u
-      h_t = e_t . z - b_t ;  a_t = relu(h_t) if h_t / score_div_t > thr_t else 0              gate of atom t
-      y_std = z W_skip + b_dec + sum over atoms t of  a_t * ((z V_t^T) * s_t) U_t             V_t, U_t (rank_t, d)
-      y = y_std * sd_y + mu_y                                                                  ~ raw MLP output
-
-    Atoms are stored by rank tier (1, 2, 4, 8, 16). `rank` (T,) gives each atom's rank. The gate has a hard threshold: an atom whose
-    h sits within float rounding of its threshold can come out on or off depending on batch shape and precision (about one (token, atom)
-    pair in 10^8), which changes that token's output by up to about 0.5 percent of the largest output.
-    """
-
-    def __init__(self, path: str, device: Device = "cpu", chunk: int = 512) -> None:
-        with open(os.path.join(path, "cfg.json")) as f:
-            cfg = json.load(f)
-        rule = cfg["rule_cfg"]
-        if rule.get("binary") or rule.get("read_shift") or rule.get("tied_read") or rule.get("offset"):
-            raise ValueError(f"{path}: export variant not supported by this reader ({rule})")
-        weights = load_file(os.path.join(path, "weights.safetensors"))
-        self.cfg: dict = cfg
-        self.device: Device = device
-        self.chunk: int = chunk                                                    # tokens per decode step (memory, not results)
-        self.d: int = int(cfg["d"])
-        self.n_atoms: int = int(cfg["n_atoms"])
-        with open(os.path.join(path, "input.json")) as f:
-            self.eps: float = float(json.load(f)["eps"])
-
-        def tensor(key: str) -> torch.Tensor:
-            return weights[key].float().to(device)
-        self.w_eff, self.mu_u, self.sd_u, self.mu_y, self.sd_y = (tensor(f"calib_{k}") for k in ("norm_w_eff", "mu_u", "sd_u", "mu_y", "sd_y"))
-        self.e: torch.Tensor = tensor("e")                                         # (T, d) gate read directions
-        self.b: torch.Tensor = tensor("b")                                         # (T,) gate biases
-        self.W_skip: torch.Tensor = tensor("W_skip")                               # (d, d) linear part
-        self.b_dec: torch.Tensor = tensor("b_dec")                                 # (d,)
-        self.score_div: torch.Tensor = tensor("score_div")                         # (T,)
-        self.thr: torch.Tensor = tensor("thr_atom")                                # (T,)
-        self.ranks: list[int] = sorted(int(r) for r in cfg["rank_hist"])
-        self.rank: torch.Tensor = torch.zeros(self.n_atoms, dtype=torch.long, device=device)
-        self.pos: torch.Tensor = torch.zeros(self.n_atoms, dtype=torch.long, device=device)     # index of the atom inside its tier
-        self.idx: dict[int, torch.Tensor] = {}                                     # rank -> (T_r,) atom ids of the tier
-        self.Vs: dict[int, torch.Tensor] = {}                                      # rank -> (T_r, r, d) read directions times their scales
-        self.U: dict[int, torch.Tensor] = {}                                       # rank -> (T_r, r, d) write directions
-        for r in self.ranks:
-            idx = weights[f"idx_r{r}"].long().to(device)
-            self.idx[r], self.U[r] = idx, tensor(f"U_r{r}")
-            self.Vs[r] = tensor(f"V_r{r}") * tensor(f"s_r{r}")[:, :, None]
-            self.rank[idx], self.pos[idx] = r, torch.arange(len(idx), device=device)
-
-    def standardize_input(self, x: torch.Tensor) -> torch.Tensor:
-        """x (n, d) raw resid_mid -> z (n, d): the layer's own RMSNorm, then the calibration's per-dimension standardization"""
-        x = x.to(self.device).float()
-        u = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.w_eff
-        return (u - self.mu_u) / self.sd_u
-
-    def gate(self, z: torch.Tensor) -> torch.Tensor:
-        """z (n, d) standardized -> a (n, T), zero for atoms that are off"""
-        h = z @ self.e.T - self.b
-        return torch.relu(h) * ((h / self.score_div > self.thr) & (h > 0)).to(h.dtype)
-
-    def _decode(self, z: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
-        y = z @ self.W_skip + self.b_dec
-        for r in self.ranks:
-            n_r = self.U[r].shape[0]
-            lat = (z @ self.Vs[r].reshape(n_r * r, self.d).T).view(z.shape[0], n_r, r) * a[:, self.idx[r]][:, :, None]
-            y = y + lat.reshape(z.shape[0], n_r * r) @ self.U[r].reshape(n_r * r, self.d)
-        return y
-
-    @torch.no_grad()
-    def forward(self, x: torch.Tensor, a: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
-        """x (n, d) raw resid_mid -> a (n, T), y (n, d) raw MLP output estimate. Pass an edited `a` to steer (same shape)."""
-        z = self.standardize_input(x)
-        if a is None:
-            a = self.gate(z)
-        y = torch.cat([self._decode(zc, ac) for zc, ac in zip(z.split(self.chunk), a.split(self.chunk))])
-        return a, y * self.sd_y + self.mu_y
-
-    @torch.no_grad()
-    def atom_write(self, x: torch.Tensor, atom: int) -> torch.Tensor:
-        """what one atom adds to the raw MLP output for each token of x: (n, d), zero where the atom is off"""
-        z = self.standardize_input(x)
-        # the gate of `gate`, repeated for one atom: the two must stay the same operations
-        h = z @ self.e[atom] - self.b[atom]
-        a = torch.relu(h) * ((h / self.score_div[atom] > self.thr[atom]) & (h > 0)).to(h.dtype)
-        r, p = int(self.rank[atom]), int(self.pos[atom])
-        return ((z @ self.Vs[r][p].T) * a[:, None]) @ self.U[r][p] * self.sd_y

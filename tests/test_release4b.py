@@ -1,5 +1,5 @@
 """The Qwen3.5-4B set laid out as published (state/L<L>/, mlp/L<L>/, MANIFEST.json).
-The pass/fail rules are R10.6 and R10.7 of tests/EQUIVALENCE_RULES.md (written before these checks were first run)."""
+The pass/fail rules are R10.6, R10.7, R10.8 and R11.1 - R11.3 of tests/EQUIVALENCE_RULES.md (each written before its checks were first run)."""
 from __future__ import annotations
 
 import copy
@@ -10,10 +10,9 @@ import torch
 import yaml
 
 from conftest import REPO, TEST_OUT, Settings
-from hashing import sha256_file
+from published_checks import check_config_edits, check_manifest_hashes, check_no_internal_names, check_no_private_paths
 from statescope.config import MODELS
 from statescope.reader import PublicMolt
-from test_release2 import MLP_FILES, PRIVATE, STATE_FILES, _header
 
 pytestmark = [pytest.mark.legacy]
 
@@ -25,10 +24,13 @@ READER_FVU = REPO / "release" / "qwen35-4b" / "reader_fvu.json"
 @pytest.mark.parametrize("layer", LAYERS)
 def test_manifest_hashes(layer: int, settings: Settings) -> None:
     """R10.6 (a)"""
-    root = settings.need_release4b()
-    entry = json.loads((root / "MANIFEST.json").read_text())["layers"][str(layer)]
-    assert {name: sha256_file(root / "state" / f"L{layer}" / name) for name in STATE_FILES} == entry["state"]["sha256"]
-    assert {name: sha256_file(root / "mlp" / f"L{layer}" / name) for name in MLP_FILES} == entry["mlp"]["sha256"]
+    check_manifest_hashes(settings.need_release4b(), layer)
+
+
+@pytest.mark.parametrize("layer", LAYERS)
+def test_published_configs_are_the_originals_with_the_stated_edit(layer: int, settings: Settings) -> None:
+    """R11.1, R11.2"""
+    check_config_edits(settings.need_release4b(), layer, settings.vocab4b_dir(layer), settings.mlp_copy_4b_dir(layer))
 
 
 @pytest.mark.parametrize("layer", LAYERS)
@@ -91,15 +93,36 @@ def test_reader_fvu_on_all_heldout_tokens(settings: Settings) -> None:
 
 def test_no_private_paths(settings: Settings) -> None:
     """R10.6 (d)"""
+    check_no_private_paths(settings.need_release4b(), LAYERS, ("MANIFEST.json", "ALWAYS_ON.json"))
+
+
+def test_no_internal_names(settings: Settings) -> None:
+    """R11.3; the staged folder holds the model card as README.md"""
+    check_no_internal_names(settings.need_release4b(), LAYERS, ("MANIFEST.json", "ALWAYS_ON.json", "README.md"))
+
+
+@pytest.mark.gpu
+@pytest.mark.model
+def test_reading_a_text_with_the_4b_model(settings: Settings, device: str) -> None:
+    """R10.8: the model card's usage lines, once, on the 4B model and the published folder"""
+    from statescope.lm import load_language_model
+    from statescope.reader import StateVocab, capture, fvu
+    layer = 16
     root = settings.need_release4b()
-    hits = []
-    for layer in LAYERS:
-        for path in (root / "state" / f"L{layer}" / "cfg.json", root / "mlp" / f"L{layer}" / "config.yaml"):
-            hits += [(str(path), line.strip()) for line in path.read_text().splitlines() if PRIVATE.search(line)]
-        for path in (root / "state" / f"L{layer}" / "weights.safetensors", root / "state" / f"L{layer}" / "usage.safetensors",
-                     root / "mlp" / f"L{layer}" / "weights.safetensors", root / "mlp" / f"L{layer}" / "postnorm.safetensors"):
-            metadata = _header(path).get("__metadata__") or {}
-            hits += [(str(path), f"{k}: {v}") for k, v in metadata.items() if PRIVATE.search(str(v))]
-    assert not hits, hits
-    for name in ("MANIFEST.json", "ALWAYS_ON.json"):
-        assert not PRIVATE.search((root / name).read_text()), name
+    lm = load_language_model(MODEL, device)
+    input_ids = torch.tensor([lm.tokenizer("The committee met on Thursday to review the budget.")["input_ids"]], device=device)
+    acts = capture(lm.model, layer, input_ids)
+    vocab = StateVocab(str(root / "state" / f"L{layer}"), device)
+    molt = PublicMolt(str(root / "mlp" / f"L{layer}"), device)
+    measured = {"tokens": int(input_ids.shape[1]), "text": "The committee met on Thursday to review the budget."}
+    for kind in ("resid_mid", "resid_post"):
+        assert acts[kind].shape == (input_ids.shape[1] - 1, MODEL.d_model)
+        measured[f"fvu_state_{kind}"] = fvu(acts[kind], vocab.reconstruct(acts[kind], f"{kind}.{layer}"))
+    gates, y_hat = molt.forward(acts["resid_mid"])
+    measured["fvu_mlp"] = fvu(acts["mlp_out"], y_hat)
+    measured["transforms_on_per_token"] = float((gates > 0).sum() / gates.shape[0])
+    out = TEST_OUT / "measured" / "release4b"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "usage_lines.json").write_text(json.dumps(measured, indent=1) + "\n")
+    for name in ("fvu_state_resid_mid", "fvu_state_resid_post", "fvu_mlp"):
+        assert 0.0 <= measured[name] < 1.0, measured

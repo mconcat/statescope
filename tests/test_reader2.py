@@ -1,5 +1,6 @@
-"""Readers of the second 0.8B design (tied state dictionary with per-token RMS input; MLP dictionary in the public penalty form).
-The pass/fail rules are R8.1 - R8.5 of tests/EQUIVALENCE_RULES.md (written before these tests were first run)."""
+"""The two readers on the 0.8B set (tied state dictionary with per-token RMS input; MLP dictionary in the public penalty form).
+The pass/fail rules are R8.1 - R8.5 of tests/EQUIVALENCE_RULES.md (written before these tests were first run), read with R11.4: the
+reference code reads the original project's files, and this repository's reader reads the published copy of the same dictionary."""
 from __future__ import annotations
 
 import json
@@ -32,16 +33,24 @@ MEASURED = TEST_OUT / "measured" / "reader2"
 class LayerFiles:
     """where one layer's two dictionaries and its held-out tokens are"""
     calib: Path          # calibration folder: heldout_<split>/ with x = raw resid_mid, y = raw MLP output
-    vocab: Path          # state dictionary: cfg.json, weights.safetensors (two folders below the run's layer_recipe_done.json)
-    molt: Path           # MLP dictionary: weights.safetensors, config.yaml
-    post_norm: Path      # the layer's RMSNorm coefficients
+    vocab: Path          # state dictionary as the reference reads it: the original export (two folders below the run's layer_recipe_done.json)
+    molt: Path           # MLP dictionary as the reference reads it: weights.safetensors, config.yaml
+    post_norm: Path      # the layer's RMSNorm coefficients for the reference
+    published: Path      # the published set: state/L<L>/ and mlp/L<L>/, which this repository's reader reads
     measured: Path = MEASURED     # where the measured numbers are written
     chunk: int | None = None      # tokens per public forward in the reference run (default of the reference script: 64)
 
 
 def files_08b(settings: Settings, layer: int, post_norm_dir: Path) -> LayerFiles:
-    """the 0.8B layer's training exports, with the post-norm file rebuilt from the language model"""
-    return LayerFiles(settings.calib2_dir(layer), settings.vocab2_dir(layer), settings.molt2_dir(layer) / "export", post_norm_dir / f"L{layer}.safetensors")
+    """Layers 0-22: the reference reads the layer's training export, with the post-norm file rebuilt from the language model.
+    Layer 23: the published dictionary comes from another run than that export, so the reference reads the original project's
+    path-free copy of it, with the copy's own post-norm file (R8.7 c)."""
+    if layer == 23:
+        molt = settings.mlp_copy_08b_dir(23)
+        post_norm = molt / "postnorm.safetensors"
+    else:
+        molt, post_norm = settings.molt2_dir(layer) / "export", post_norm_dir / f"L{layer}.safetensors"
+    return LayerFiles(settings.calib2_dir(layer), settings.vocab2_dir(layer), molt, post_norm, settings.need_release2())
 
 
 @pytest.fixture(autouse=True)
@@ -101,7 +110,7 @@ def test_state_reader(layer: int, settings: Settings, device: str, post_norm_dir
 def check_state_reader(layer: int, settings: Settings, device: str, files: LayerFiles) -> None:
     """R8.1, R8.2 and R8.5 for one layer's state dictionary (also used for the 4B set, R10)"""
     ref, info, held = _reference(settings, layer, files)
-    vocab = StateVocab(str(files.vocab), device)
+    vocab = StateVocab(str(files.published / "state" / f"L{layer}"), device)
     assert (vocab.cfg["form"], vocab.cfg["input"]) == ("bsf", "token_rms")
     trainer = json.loads((files.vocab.parents[1] / "layer_recipe_done.json").read_text())["vocab_heldout_fvu"]["B1s0"]
     measured: dict = {}
@@ -148,9 +157,9 @@ def test_molt_reader(layer: int, settings: Settings, device: str, post_norm_dir:
 
 
 def check_molt_reader(layer: int, settings: Settings, device: str, files: LayerFiles, save_as: str) -> None:
-    """R8.3 and R8.5 for one copy of a layer's MLP dictionary (also used for the frozen release folder, R8.7 c, and the 4B set, R10)"""
+    """R8.3 and R8.5 for one layer's MLP dictionary (also used for the 4B set, R10)"""
     ref, info, held = _reference(settings, layer, files)
-    molt = PublicMolt(str(files.molt), device, post_norm=str(files.post_norm))
+    molt = PublicMolt(str(files.published / "mlp" / f"L{layer}"), device)
     assert (molt.layer, molt.n_transforms) == (layer, info["molt_n_transforms"])
     measured: dict = {"per_split": {}}
     sse = sst = n_active = 0.0

@@ -27,7 +27,7 @@ from conftest import REPO, TEST_OUT, Settings
 
 SCRIPTS = REPO / "tests" / "legacy_scripts"
 SANDBOX = TEST_OUT / "legacy_sandbox"
-MIN_REFERENCE_GB = 8.0          # the reader / capture / splice references ran under an 8 GiB cap in the original
+MIN_REFERENCE_GB = 8.0          # the reader and capture references ran under an 8 GiB cap in the original
 _verified: set[Path] = set()
 
 
@@ -42,21 +42,19 @@ def verify_snapshot(snapshot: Path) -> None:
     _verified.add(snapshot)
 
 
-def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int = 3600, *, training: bool = False,
-               coverage: bool = False, snapshot: Path | None = None) -> Path:
+def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int = 3600, *, snapshot: Path | None = None) -> Path:
     """Run tests/legacy_scripts/<script> with `--out <dir>` + args; returns <dir> (cached). Raises if the script fails.
 
-    training: a trainer run. It goes to settings.train_device (queued on settings.train_lock if set) and caps its own memory through
-              its --mem-gb argument, so this process must not be using that GPU's budget at the same time.
-    coverage: record executed lines of the snapshot (and of files the script writes into <dir>) in <dir>/.coverage.
-    snapshot: another frozen copy than the first design's (settings.need_snapshot2() for the second design)."""
+    snapshot: another frozen copy than the first one (settings.need_snapshot2() for the readers, need_snapshot3() for the demonstration)."""
     snapshot = (snapshot or settings.need_legacy_snapshot()).resolve()
     verify_snapshot(snapshot)
-    device = settings.train_device if training else settings.device
+    device = settings.device
     script_path = SCRIPTS / script
     key = hashlib.sha256()
+    # the last part is a constant: an option that existed while the earlier design's trainers were compared here ("coverage", always
+    # off for the references that remain). It stays in the key so that references computed before keep their folders.
     for part in ((snapshot / "SHA256SUMS").read_bytes(), script_path.read_bytes(), (SCRIPTS / "_hermetic.py").read_bytes(),
-                 json.dumps(args).encode(), device.encode(), str(coverage).encode()):
+                 json.dumps(args).encode(), device.encode(), b"False"):
         key.update(hashlib.sha256(part).digest())
     out = TEST_OUT / "legacy" / f"{script_path.stem}-{key.hexdigest()[:16]}"
     if os.environ.get("STATESCOPE_USED_RUNS"):       # cleanup aid: append every cached run folder this session resolves to that file
@@ -64,7 +62,7 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
             f.write(f"{out}\n")
     if (out / "DONE").is_file():
         return out
-    if out.exists():                 # an earlier attempt that did not finish: the legacy trainers refuse to write into a used folder
+    if out.exists():                 # an earlier attempt that did not finish
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
     (SANDBOX / "results").mkdir(parents=True, exist_ok=True)
@@ -72,7 +70,7 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
     # legacy process's cap. (After a forward pass a few MB stay allocated inside the kernels and pin a block of about 1.4 GiB, so
     # "holds nothing" is not reachable; a real leak of a model would leave too little for the reference and fail here.)
     legacy_gb = settings.gpu_gb - 2.0
-    if not training and torch.cuda.is_initialized():
+    if torch.cuda.is_initialized():
         gc.collect()                 # models of earlier tests have reference cycles
         torch.cuda.empty_cache()
         held_gb = torch.cuda.memory_reserved(torch.device(device)) / 2**30
@@ -94,12 +92,7 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
         "TOKENIZERS_PARALLELISM": "false",
         "HF_HUB_OFFLINE": "1",
     })
-    command = [sys.executable]
-    if coverage:
-        command += ["-m", "coverage", "run", f"--data-file={out / '.coverage'}", f"--include={snapshot}/*,{out}/*"]
-    command += [str(script_path), "--out", str(out), *args]
-    if training and settings.train_lock is not None:
-        command = ["flock", str(settings.train_lock), *command]
+    command = [sys.executable, str(script_path), "--out", str(out), *args]
     with open(out / "log.txt", "w") as log:
         proc = subprocess.run(command, cwd=SANDBOX, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=timeout_s)
     if proc.returncode != 0:

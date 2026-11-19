@@ -2,9 +2,7 @@
 
     python demo/verify_release.py --release <folder with MANIFEST.json, state/ and mlp/>
 
-This script knows the published layout only (MANIFEST.json, state/L<L>/, mlp/L<L>/) and compares sha256 only. It uses the standard
-library only, so it runs before anything is installed. The earlier design's release (manifest.json, layers/Lxx/{vocab,molt}/, size
-and sha256) is checked by `statescope verify` instead.
+It compares sha256 only and uses the standard library only, so it runs before anything is installed.
 """
 from __future__ import annotations
 

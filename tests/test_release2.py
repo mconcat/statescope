@@ -1,51 +1,40 @@
-"""The frozen 0.8B set of the second design, laid out as published (state/L<L>/, mlp/L<L>/, MANIFEST.json).
-The pass/fail rule is R8.7 of tests/EQUIVALENCE_RULES.md (written before these checks were first run)."""
+"""The 0.8B set laid out as published (state/L<L>/, mlp/L<L>/, MANIFEST.json).
+The pass/fail rules are R8.7, R8.8 and R11.1 - R11.3 of tests/EQUIVALENCE_RULES.md (each written before its checks were first run)."""
 from __future__ import annotations
 
+import copy
 import json
-import re
-import struct
-from pathlib import Path
 
 import pytest
 import torch
+import yaml
 from safetensors import safe_open
 
 from conftest import REPO, TEST_OUT, Settings
-from hashing import sha256_file
+from published_checks import check_config_edits, check_manifest_hashes, check_no_internal_names, check_no_private_paths
 from statescope.config import MODELS
 from statescope.reader import PublicMolt, write_post_norm
-from test_reader2 import LayerFiles, check_molt_reader
-from test_repo_rules import FORBIDDEN
 
 pytestmark = [pytest.mark.legacy]
 
 LAYERS = range(24)
-STATE_FILES = ("cfg.json", "weights.safetensors", "usage.safetensors")
-MLP_FILES = ("config.yaml", "weights.safetensors", "postnorm.safetensors")
-# R8.7 (d): nothing of the machines the set was made on. The repository's own list, plus folders of rented machines and any IPv4 address.
-PRIVATE = re.compile("|".join(FORBIDDEN + [r"/root/", r"/workspace", r"\bdesktop\b", r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"]))
-
-
-def _header(path: Path) -> dict:
-    """the JSON header of a safetensors file (tensor table and metadata), without reading the tensors"""
-    with open(path, "rb") as f:
-        (n,) = struct.unpack("<Q", f.read(8))
-        return json.loads(f.read(n))
 
 
 @pytest.mark.parametrize("layer", LAYERS)
 def test_manifest_hashes(layer: int, settings: Settings) -> None:
     """R8.7 (a)"""
-    root = settings.need_release2()
-    entry = json.loads((root / "MANIFEST.json").read_text())["layers"][str(layer)]
-    assert {name: sha256_file(root / "state" / f"L{layer}" / name) for name in STATE_FILES} == entry["state"]["sha256"]
-    assert {name: sha256_file(root / "mlp" / f"L{layer}" / name) for name in MLP_FILES} == entry["mlp"]["sha256"]
+    check_manifest_hashes(settings.need_release2(), layer)
+
+
+@pytest.mark.parametrize("layer", LAYERS)
+def test_published_configs_are_the_originals_with_the_stated_edit(layer: int, settings: Settings) -> None:
+    """R11.1, R11.2"""
+    check_config_edits(settings.need_release2(), layer, settings.vocab2_dir(layer), settings.mlp_copy_08b_dir(layer))
 
 
 @pytest.mark.parametrize("layer", range(23))
 def test_mlp_tensors_are_the_tested_exports(layer: int, settings: Settings) -> None:
-    """R8.7 (b): layers 0-22 hold the tensors R8 read, bit for bit (CPU)"""
+    """R8.7 (b): layers 0-22 hold the tensors of the training exports that the reference of R8.3 reads, bit for bit (CPU)"""
     released = PublicMolt(str(settings.need_release2() / "mlp" / f"L{layer}"))
     export = settings.molt2_dir(layer)
     tested = PublicMolt(str(export / "export"), post_norm=str(export / "postnorm_rebuilt" / "postnorm.safetensors"))
@@ -56,27 +45,22 @@ def test_mlp_tensors_are_the_tested_exports(layer: int, settings: Settings) -> N
         assert torch.equal(a, b)
 
 
-@pytest.mark.gpu
 @pytest.mark.model
-def test_layer_23(settings: Settings, device: str) -> None:
-    """R8.7 (c): layer 23 comes from another training run than the export R8 read, so it gets its own reference run"""
+def test_layer_23_post_norm_file_comes_from_the_language_model(settings: Settings) -> None:
+    """R8.7 (c), the part R8.4 states: layer 23 comes from another training run than the export R8 read, and its published
+    post-norm file holds the language model's coefficients. (R8.3 and R8.5 for layer 23 are in test_reader2.py.)"""
     from statescope.lm import load_language_model
     folder = settings.need_release2() / "mlp" / "L23"
     rebuilt = TEST_OUT / "release2" / "postnorm_L23.safetensors"
     rebuilt.parent.mkdir(parents=True, exist_ok=True)
     write_post_norm(load_language_model(MODELS["qwen3.5-0.8b"], "cpu").model, 23, str(rebuilt))
     with safe_open(str(rebuilt), framework="pt") as a, safe_open(str(folder / "postnorm.safetensors"), framework="pt") as b:
-        assert torch.equal(a.get_tensor("w_eff"), b.get_tensor("w_eff"))                 # R8.4
+        assert torch.equal(a.get_tensor("w_eff"), b.get_tensor("w_eff"))
         assert float(a.metadata()["eps"]) == float(b.metadata()["eps"])
-    files = LayerFiles(settings.calib2_dir(23), settings.vocab2_dir(23), folder, folder / "postnorm.safetensors")
-    check_molt_reader(23, settings, device, files, "molt_release")                                    # R8.3, R8.5
 
 
 def test_configs_hold_the_documented_training_facts(settings: Settings) -> None:
     """R8.8 (c): what the documents say about "each layer" is in every layer's config"""
-    import copy
-
-    import yaml
     root = settings.need_release2()
     reference = None
     for layer in LAYERS:
@@ -107,21 +91,16 @@ def test_reader_fvu_on_all_heldout_tokens(settings: Settings) -> None:
                 assert diff <= 1e-4, (layer, site, which, mine[site][which], theirs[column])
         for which in ("position_0_dropped", "with_position_0"):
             assert 0.0 < mine["mlp"][which] < 1.0, (layer, which)
-    MEASURED = TEST_OUT / "measured" / "release2"
-    MEASURED.mkdir(parents=True, exist_ok=True)
-    (MEASURED / "reader_fvu_vs_table.json").write_text(json.dumps({"largest_difference": worst, "limit": 1e-4}) + "\n")
+    out = TEST_OUT / "measured" / "release2"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "reader_fvu_vs_table.json").write_text(json.dumps({"largest_difference": worst, "limit": 1e-4}) + "\n")
 
 
 def test_no_private_paths(settings: Settings) -> None:
     """R8.7 (d)"""
-    root = settings.need_release2()
-    hits = []
-    for layer in LAYERS:
-        for path in (root / "state" / f"L{layer}" / "cfg.json", root / "mlp" / f"L{layer}" / "config.yaml"):
-            hits += [(str(path), line.strip()) for line in path.read_text().splitlines() if PRIVATE.search(line)]
-        for path in (root / "state" / f"L{layer}" / "weights.safetensors", root / "state" / f"L{layer}" / "usage.safetensors",
-                     root / "mlp" / f"L{layer}" / "weights.safetensors", root / "mlp" / f"L{layer}" / "postnorm.safetensors"):
-            metadata = _header(path).get("__metadata__") or {}
-            hits += [(str(path), f"{k}: {v}") for k, v in metadata.items() if PRIVATE.search(str(v))]
-    assert not hits, hits
-    assert not PRIVATE.search((root / "MANIFEST.json").read_text())
+    check_no_private_paths(settings.need_release2(), LAYERS, ("MANIFEST.json",))
+
+
+def test_no_internal_names(settings: Settings) -> None:
+    """R11.3; the staged folder holds the model card as README.md"""
+    check_no_internal_names(settings.need_release2(), LAYERS, ("MANIFEST.json", "README.md"))

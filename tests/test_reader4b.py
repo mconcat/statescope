@@ -1,6 +1,7 @@
-"""Readers on the Qwen3.5-4B set (32 layers, width 2,560; same forms as the second 0.8B design).
+"""The two readers on the Qwen3.5-4B set (32 layers, width 2,560; same forms as the 0.8B set).
 The pass/fail rules are R10.1 - R10.5 of tests/EQUIVALENCE_RULES.md (written before these tests were first run): R8's checks and limits
-on other folders. The checks themselves are the ones of test_reader2.py."""
+on other folders, read with R11.4 (the reference reads the original files, this repository's reader the published copy). The checks
+themselves are the ones of test_reader2.py."""
 from __future__ import annotations
 
 import json
@@ -31,9 +32,11 @@ def _free_gpu_memory():
 
 
 def files_4b(settings: Settings, layer: int) -> LayerFiles:
-    """the 4B layer's training exports; the MLP export holds its own post-norm file (R10.4 compares it with the language model)"""
+    """the reference reads the 4B layer's training exports; the MLP export holds its own post-norm file (R10.4 compares it with the
+    language model)"""
     molt = settings.molt4b_dir(layer)
-    return LayerFiles(settings.calib4b_dir(layer), settings.vocab4b_dir(layer), molt, molt / "postnorm.safetensors", MEASURED, REFERENCE_CHUNK)
+    return LayerFiles(settings.calib4b_dir(layer), settings.vocab4b_dir(layer), molt, molt / "postnorm.safetensors", settings.need_release4b(),
+                      MEASURED, REFERENCE_CHUNK)
 
 
 def test_post_norm_files_come_from_the_language_model(settings: Settings) -> None:
