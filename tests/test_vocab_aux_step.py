@@ -48,6 +48,7 @@ def test_vocab_aux_step_equals_legacy(settings: Settings):
             pytest.fail(f"rule R4.5 is void: legacy run {name} reports n_dead {record['n_dead']}, L_aux {record['L_aux']}", pytrace=False)
 
     paths = data_paths_08b(settings)
+    # `exclude` matches nothing since the dictionary packages moved under earlier_design/: the cache key covers all of src/statescope
     new = _files(run_new("vocab_step.py", [*step_args(settings), "--pile-dir", paths.pile_dir, "--ultrachat-dir", paths.ultrachat_dir],
                          settings, timeout_s=6 * 3600, exclude=("molt",)))
 

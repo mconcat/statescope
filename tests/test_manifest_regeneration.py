@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from conftest import REPO, Settings
-from statescope.foldcheck import fold_error_verdict
-from statescope.release import LayerNumbers, build_manifest
+from statescope.earlier_design.foldcheck import fold_error_verdict
+from statescope.earlier_design.release import LayerNumbers, build_manifest
 
 
 def _last_record(path: Path) -> dict:

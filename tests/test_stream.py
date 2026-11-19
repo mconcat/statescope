@@ -11,8 +11,8 @@ import torch
 from conftest import Settings
 from legacy_bridge import run_legacy
 from statescope.config import MIX_08B, DataPaths
-from statescope.data.mix import MixStream, StreamState, prefix_set, reference_sequences
-from statescope.data.sources import pile_dir_in_hf_cache
+from statescope.earlier_design.data.mix import MixStream, StreamState, prefix_set, reference_sequences
+from statescope.earlier_design.data.sources import pile_dir_in_hf_cache
 
 N_UNITS, REPLAY_FROM, REPLAY_UNITS = 200, 120, 5
 

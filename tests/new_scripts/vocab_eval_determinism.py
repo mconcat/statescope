@@ -1,7 +1,7 @@
 """Debug measurement, not a pass/fail test: is the state dictionary's held-out evaluation repeatable on this GPU?
 
 Loads an exported dictionary (weights.safetensors of any state-dictionary export) into the training-form model and, on the first
---tokens held-out pile tokens of a calibration folder, repeats each stage of statescope.vocab.evaluate.heldout_fvu on identical inputs:
+--tokens held-out pile tokens of a calibration folder, repeats each stage of statescope.earlier_design.vocab.evaluate.heldout_fvu on identical inputs:
 
   basis       write_basis() (batched fp32 QR on the GPU), --repeats times
   reconstruct reconstruct() with one fixed basis (its last operation is an index_add_ with repeated rows), --repeats times
@@ -17,8 +17,8 @@ import torch
 from safetensors.torch import load_file
 
 from statescope.heldout import load_heldout
-from statescope.vocab.model import StateDictionary
-from statescope.vocab.recipe import VocabRecipe
+from statescope.earlier_design.vocab.model import StateDictionary
+from statescope.earlier_design.vocab.recipe import VocabRecipe
 
 
 @torch.no_grad()

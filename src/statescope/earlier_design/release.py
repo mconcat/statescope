@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-from statescope.manifest import layer_dir, sha256_file
+from statescope.earlier_design.manifest import layer_dir, sha256_file
 
 VOCAB_FILES = ("cfg.json", "weights.safetensors", "usage.safetensors")
 MOLT_FILES = ("cfg.json", "input.json", "weights.safetensors", "freq_train.safetensors")
@@ -31,8 +31,8 @@ class LayerNumbers:
     molt_train_tokens: int
     molt_silent_fraction: float                  # atoms that never fire on the held-out tokens
     molt_fold_err: float                         # the trainer's export-vs-training-model check
-    molt_gate_flips: int | None                  # gate decisions differing between fp32 and fp64 on 4,096 tokens (statescope.foldcheck)
-    molt_fold_verdict: str | None                # statescope.foldcheck.fold_error_verdict
+    molt_gate_flips: int | None                  # gate decisions differing between fp32 and fp64 on 4,096 tokens (statescope.earlier_design.foldcheck)
+    molt_fold_verdict: str | None                # statescope.earlier_design.foldcheck.fold_error_verdict
     splice: dict | None = None                   # statescope.splice.splice_layer result on 100 documents, if measured
     other_notes: list[str] = field(default_factory=list)
 

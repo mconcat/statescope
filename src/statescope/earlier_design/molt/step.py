@@ -18,8 +18,8 @@ from dataclasses import dataclass
 
 import torch
 
-from statescope.molt.model import MoltModel
-from statescope.molt.recipe import MoltRecipe
+from statescope.earlier_design.molt.model import MoltModel
+from statescope.earlier_design.molt.recipe import MoltRecipe
 
 
 @dataclass

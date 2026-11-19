@@ -11,8 +11,8 @@ from __future__ import annotations
 import torch
 
 from statescope.heldout import HELDOUT_SPLITS, load_heldout
-from statescope.vocab.model import StateDictionary
-from statescope.vocab.recipe import site_names
+from statescope.earlier_design.vocab.model import StateDictionary
+from statescope.earlier_design.vocab.recipe import site_names
 
 
 def load_heldout_sites(calib_dir: str, layer: int, device: torch.device | str, tokens: int) -> dict[str, list[torch.Tensor]]:

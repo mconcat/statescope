@@ -15,15 +15,15 @@ import time
 
 import torch
 
-from statescope.calibration import CalibStats
-from statescope.data.mix import MixStream, reference_sequences
+from statescope.earlier_design.calibration import CalibStats
+from statescope.earlier_design.data.mix import MixStream, reference_sequences
 from statescope.lm import Capturer, LanguageModel
-from statescope.train.loop import LoopSettings, training_batches
-from statescope.vocab.calibrate import calibrate_sites
-from statescope.vocab.evaluate import heldout_fvu, load_heldout_sites
-from statescope.vocab.export import export_vocab, vocab_cfg
-from statescope.vocab.model import StateDictionary
-from statescope.vocab.recipe import VocabRecipe, site_names
+from statescope.earlier_design.train.loop import LoopSettings, training_batches
+from statescope.earlier_design.vocab.calibrate import calibrate_sites
+from statescope.earlier_design.vocab.evaluate import heldout_fvu, load_heldout_sites
+from statescope.earlier_design.vocab.export import export_vocab, vocab_cfg
+from statescope.earlier_design.vocab.model import StateDictionary
+from statescope.earlier_design.vocab.recipe import VocabRecipe, site_names
 
 
 class VocabTrainer:

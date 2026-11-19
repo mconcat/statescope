@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import torch
 
 from statescope.config import SOURCES, DataPaths, MixSpec
-from statescope.data.sources import PileTrainStream, UltraChat, corpus_sequences, corpus_tokens, pile_first_rows
+from statescope.earlier_design.data.sources import PileTrainStream, UltraChat, corpus_sequences, corpus_tokens, pile_first_rows
 
 Part = tuple[str, list[torch.Tensor]]      # (source name, token sequences)
 

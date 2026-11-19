@@ -61,6 +61,7 @@ def test_molt_training_equals_legacy(settings: Settings, variant: str):
             "--pile-dir", paths.pile_dir, "--ultrachat-dir", paths.ultrachat_dir, "--view-corpus", paths.view_corpus, "--full-corpus", paths.full_corpus]
     if variant == "dead":
         args += ["--dead-tokens", DEAD_VARIANT[1]]
+    # `exclude` matches nothing since the dictionary packages moved under earlier_design/: the cache key covers all of src/statescope
     new = _new_files(run_new("train_molt.py", args, settings, timeout_s=6 * 3600, exclude=("vocab",)))
     failures, report = compare(new, a, b)
     (TEST_OUT / "measured").mkdir(parents=True, exist_ok=True)

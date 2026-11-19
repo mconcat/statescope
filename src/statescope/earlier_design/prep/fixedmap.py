@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from safetensors import safe_open
 from safetensors.torch import save_file
 
-from statescope.data.mix import MixStream, reference_sequences
+from statescope.earlier_design.data.mix import MixStream, reference_sequences
 from statescope.lm import PAD_TOKEN, LanguageModel, forward_capture
 
 SEQUENCES_PER_BATCH = 8

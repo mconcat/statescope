@@ -16,13 +16,14 @@ from pathlib import Path
 import torch
 from safetensors.torch import save_file
 
-from statescope.vocab.model import StateDictionary
+from statescope.earlier_design.vocab.model import StateDictionary
 
-TRAINER = "statescope.vocab.train"
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+TRAINER = "statescope.earlier_design.vocab.train"
+_PACKAGE_ROOT = Path(__file__).resolve().parents[2]      # the statescope folder
 # files whose md5 is recorded in cfg.json as code_md5 (which code wrote the export)
-_CODE_FILES = ("vocab/recipe.py", "vocab/model.py", "vocab/calibrate.py", "vocab/evaluate.py", "vocab/export.py", "vocab/train.py",
-               "train/loop.py", "data/mix.py", "lm.py", "calibration.py")
+_CODE_FILES = ("earlier_design/vocab/recipe.py", "earlier_design/vocab/model.py", "earlier_design/vocab/calibrate.py",
+               "earlier_design/vocab/evaluate.py", "earlier_design/vocab/export.py", "earlier_design/vocab/train.py",
+               "earlier_design/train/loop.py", "earlier_design/data/mix.py", "lm.py", "earlier_design/calibration.py")
 # Fields of the original cfg.json that describe options this trainer does not have. They are written with the values every released
 # dictionary has, so that tools reading the format keep working.
 _FORMAT_CONSTANTS_A = {"lam_dr": 0.0, "lam_pc": 0.0, "kappa": 1.0, "pc_p": 1.0, "pc_eps": 0.01, "pc_ramp_frac": 0.05, "lam_nest": 0.0,

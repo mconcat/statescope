@@ -167,7 +167,7 @@ The demonstration has these caveats:
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
 - `devtools/` holds original-code freezing and tracing tools.
-- The earlier design's code is under `src/statescope/` in `vocab/`, `molt/`, `prep/`, `data/` and `train/`. The `statescope` command line and `release/qwen35-08b/` also belong to that design. `examples/reconstruct_texts.py` is an example for it.
+- The earlier design's code is under `src/statescope/earlier_design/` in `vocab/`, `molt/`, `prep/`, `data/` and `train/`. The `statescope` command line and `release/qwen35-08b/` also belong to that design. `examples/reconstruct_texts.py` is an example for it.
 
 ## Tests
 

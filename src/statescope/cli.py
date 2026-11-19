@@ -54,7 +54,7 @@ def _cap_gpu(device: str, gb: float | None) -> None:
 
 
 def cmd_verify(args: argparse.Namespace) -> None:
-    from statescope.manifest import load_manifest, verify_files
+    from statescope.earlier_design.manifest import load_manifest, verify_files
     problems = verify_files(load_manifest(args.manifest), args.root, workers=args.workers)
     for line in problems:
         print(line)
@@ -65,7 +65,7 @@ def cmd_verify(args: argparse.Namespace) -> None:
 
 def cmd_calibrate(args: argparse.Namespace) -> None:
     from statescope.lm import load_language_model
-    from statescope.prep.calibrate import calibrate
+    from statescope.earlier_design.prep.calibrate import calibrate
     mix = _mix(args.model)                      # before anything is loaded
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -73,9 +73,9 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
 
 
 def cmd_fixedmap(args: argparse.Namespace) -> None:
-    from statescope.data.mix import training_stream
+    from statescope.earlier_design.data.mix import training_stream
     from statescope.lm import load_language_model
-    from statescope.prep.fixedmap import fixed_map
+    from statescope.earlier_design.prep.fixedmap import fixed_map
     mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -85,8 +85,8 @@ def cmd_fixedmap(args: argparse.Namespace) -> None:
 
 def _training_setup(args: argparse.Namespace):
     """what both trainers need: the capped device, calibration statistics, the language model and the token stream"""
-    from statescope.calibration import load_calibration
-    from statescope.data.mix import training_stream
+    from statescope.earlier_design.calibration import load_calibration
+    from statescope.earlier_design.data.mix import training_stream
     from statescope.lm import load_language_model
     mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
@@ -99,9 +99,9 @@ def _training_setup(args: argparse.Namespace):
 
 
 def cmd_train_vocab(args: argparse.Namespace) -> None:
-    from statescope.train.loop import LoopSettings
-    from statescope.vocab.recipe import VocabRecipe
-    from statescope.vocab.train import train_vocab
+    from statescope.earlier_design.train.loop import LoopSettings
+    from statescope.earlier_design.vocab.recipe import VocabRecipe
+    from statescope.earlier_design.vocab.train import train_vocab
     stats, lm, stream = _training_setup(args)
     loop = LoopSettings(tokens=int(args.tokens), seed=args.seed)
     fvu = train_vocab(lm, args.layer, stream, stats, args.calib_dir, VocabRecipe(seed=args.seed), loop, args.out, args.log_every)
@@ -112,8 +112,8 @@ def cmd_train_molt(args: argparse.Namespace) -> None:
     from safetensors.torch import load_file
 
     from statescope.lm import Capturer
-    from statescope.molt.recipe import MoltRecipe
-    from statescope.molt.train import train_molt
+    from statescope.earlier_design.molt.recipe import MoltRecipe
+    from statescope.earlier_design.molt.train import train_molt
     stats, lm, stream = _training_setup(args)
     capturer = Capturer(lm, args.layer, _mix(args.model).min_pos)
     skip_map = load_file(args.fixmap)["W_skip_std"]
@@ -124,7 +124,7 @@ def cmd_train_molt(args: argparse.Namespace) -> None:
 
 
 def cmd_foldcheck(args: argparse.Namespace) -> None:
-    from statescope.foldcheck import fold_error_verdict, gate_flip_check
+    from statescope.earlier_design.foldcheck import fold_error_verdict, gate_flip_check
     from statescope.heldout import load_heldout
     from statescope.reader import MoltOps
     _cap_gpu(args.device, args.mem_gb)
@@ -138,7 +138,7 @@ def cmd_foldcheck(args: argparse.Namespace) -> None:
 def cmd_splice(args: argparse.Namespace) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    from statescope.manifest import layer_dir
+    from statescope.earlier_design.manifest import layer_dir
     from statescope.reader import MoltOps, StateVocab
     from statescope.splice import load_documents, splice_layer
     _cap_gpu(args.device, args.mem_gb)

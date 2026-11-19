@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import torch
 
-from statescope.calibration import CalibStats
+from statescope.earlier_design.calibration import CalibStats
 from statescope.heldout import HELDOUT_SPLITS
 from statescope.metrics import molt_heldout_numbers
-from statescope.molt.model import MoltModel
+from statescope.earlier_design.molt.model import MoltModel
 from statescope.reader import MoltOps
 
 Heldout = dict[str, tuple[torch.Tensor, torch.Tensor]]     # split -> (x raw resid_mid (n, d), y raw MLP output (n, d)), fp32

@@ -21,8 +21,8 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from statescope.calibration import CalibStats
-from statescope.molt.recipe import MoltRecipe
+from statescope.earlier_design.calibration import CalibStats
+from statescope.earlier_design.molt.recipe import MoltRecipe
 
 
 # ------------------------------------------------------------------------------------------------ whitener

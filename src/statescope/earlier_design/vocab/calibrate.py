@@ -16,7 +16,7 @@ from typing import Iterator
 import torch
 
 from statescope.lm import PAD_TOKEN, LanguageModel
-from statescope.vocab.recipe import site_names
+from statescope.earlier_design.vocab.recipe import site_names
 
 
 @dataclass(frozen=True)

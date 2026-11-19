@@ -16,7 +16,7 @@ ALLOWED_EXCEPT = {
 # machine-specific strings that must not be committed
 # (file, matched text) pairs that are allowed, each for a stated reason
 ALLOWED_STRINGS = {
-    ("src/statescope/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
+    ("src/statescope/earlier_design/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
 }
 FORBIDDEN = [r"/home/", r"/mnt/", r"\b10\.42\.\d", r"\b192\.168\.\d", r"\bprocessor\b", r"\bworkstation\b", r"\bmconcat\b"]
 
@@ -62,11 +62,17 @@ def test_no_machine_specific_string_is_committed():
 
 
 def test_the_two_dictionary_packages_do_not_import_each_other():
-    """tests/new_bridge.py leaves the other dictionary's source out of a training run's cache key; that is only right if this holds"""
+    """The two trainers of the earlier design stay independent of each other.
+
+    This rule was first needed by the cache keys of tests/new_bridge.py, which left the other dictionary's source out of a training
+    run's key. Since both packages moved under earlier_design/ the `exclude` arguments match nothing and every key covers all of
+    src/statescope, so the keys no longer depend on this. The independence itself is kept as a rule of the layout."""
     offenders = []
     for package, other in (("molt", "vocab"), ("vocab", "molt")):
-        for path in sorted((REPO / "src" / "statescope" / package).rglob("*.py")):
+        files = sorted((REPO / "src" / "statescope" / "earlier_design" / package).rglob("*.py"))
+        assert files != [], f"no source files found for the package {package}: this test would pass without checking anything"
+        for path in files:
             for node in ast.walk(ast.parse(path.read_text())):
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
-                offenders += [f"{path.relative_to(REPO)}: {n}" for n in names if n.startswith(f"statescope.{other}")]
+                offenders += [f"{path.relative_to(REPO)}: {n}" for n in names if n.startswith(f"statescope.earlier_design.{other}")]
     assert offenders == []

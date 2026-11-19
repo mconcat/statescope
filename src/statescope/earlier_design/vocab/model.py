@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from statescope.vocab.recipe import VocabRecipe
+from statescope.earlier_design.vocab.recipe import VocabRecipe
 
 # numerical guards of the balancing pass (fp64)
 _EIG_FLOOR_REL = 1e-12            # eigenvalues are floored at this fraction of the group's largest one before a matrix power

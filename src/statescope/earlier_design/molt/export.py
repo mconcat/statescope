@@ -21,12 +21,12 @@ import os
 import torch
 from safetensors.torch import save_file
 
-from statescope.calibration import CalibStats
-from statescope.molt.model import MoltModel
-from statescope.molt.step import Counters
+from statescope.earlier_design.calibration import CalibStats
+from statescope.earlier_design.molt.model import MoltModel
+from statescope.earlier_design.molt.step import Counters
 
 CALIB_KEYS = ("mu_u", "sd_u", "mu_y", "sd_y", "norm_w_eff")
-SOURCE = "statescope.molt.export (per-tier export)"
+SOURCE = "statescope.earlier_design.molt.export (per-tier export)"
 RULE_NOTE = "per-tier rule: s = s_train / m; a = relu(h) * [h / score_div > thr_atom]"
 
 
