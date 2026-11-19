@@ -12,6 +12,9 @@ because the installed console script `statescope` points at statescope.cli:main.
     statescope train-vocab --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --tokens 50e6 --out <run dir>     <data paths>
     statescope train-molt  --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --fixmap <file> --tokens 29.3e6 --out <run dir>   <data paths>
 
+`statescope verify` checks the earlier design's release (manifest.json, layers/Lxx/{vocab,molt}/; size and sha256 of every file).
+The published set (MANIFEST.json, state/L<L>/, mlp/L<L>/) is checked by `python demo/verify_release.py --release <folder>`.
+
 <data paths> = --pile-dir --ultrachat-dir --view-corpus --full-corpus (see statescope.config.DataPaths).
 The order for one layer: calibrate, fixedmap, then the two trainers (independent of each other), then foldcheck and splice on the exports.
 """
@@ -170,7 +173,8 @@ def main() -> None:
         p.add_argument("--device", default="cuda:0")
         p.add_argument("--mem-gb", type=float, default=None, help="cap this process's memory on the device (GiB)")
 
-    p = sub.add_parser("verify", help="compare the release files with the manifest (size and sha256)")
+    p = sub.add_parser("verify", help="check the earlier design's release against its manifest.json (layers/Lxx/{vocab,molt}; size and sha256); "
+                                      "the published set is checked by demo/verify_release.py")
     p.add_argument("--manifest", required=True)
     p.add_argument("--root", required=True, help="folder that holds layers/Lxx/{vocab,molt}/")
     p.add_argument("--workers", type=int, default=4)
