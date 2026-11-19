@@ -521,8 +521,8 @@ def measure(model: HookedModel, score: LineBreakScore, items: dict[str, torch.Te
     return tensors, {"energy_fraction_t189_swap": {k: v / energy["all"] for k, v in energy.items() if k != "all"}}
 
 
-def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
-    """shares per cell, arm and half; firing rates of the three transforms on the clean texts of the count cells"""
+def shares_by_cell(tensors: dict[str, torch.Tensor]) -> dict[str, dict]:
+    """cell -> arm -> half ("all", "even", "odd" by item number) -> [share, 2.5 %, 97.5 %]"""
     shares: dict[str, dict] = {}
     for cell in CELLS:
         m_c, m_x = tensors[f"margin/{cell}/m_c"], tensors[f"margin/{cell}/m_x"]
@@ -530,8 +530,15 @@ def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
         halves = {"all": index >= 0, "even": index % 2 == 0, "odd": index % 2 == 1}
         shares[cell] = {key[len(f"margin/{cell}/"):]: {h: share(m_c[sel], m[sel], m_x[sel]) for h, sel in halves.items()}
                         for key, m in tensors.items() if key.startswith(f"margin/{cell}/") and not key.endswith(("/m_c", "/m_x"))}
+    return shares
+
+
+def firing_rates(tensors: dict[str, torch.Tensor]) -> dict[str, dict]:
+    """How often L8 transform 189 and L9 transforms 410 and 1749 fire on the clean texts of the count cells: on the first token of a
+    line, on line breaks, on other tokens, and on the other tokens by the number of characters in the line so far."""
     n_count = sum(len(tensors[f"margin/{cell}/m_c"]) for cell in COUNT_CELLS)        # the count cells come first
-    lab = {k: tensors[f"label/{k}"][:n_count].bool() if k != "chars" else tensors[f"label/{k}"][:n_count] for k in ("chars", "newline", "line_first", "known")}
+    lab = {k: tensors[f"label/{k}"][:n_count].bool() if k != "chars" else tensors[f"label/{k}"][:n_count]
+           for k in ("chars", "newline", "line_first", "known")}
     usable = lab["known"].clone()
     usable[:, 0] = False                                                              # position 0 is dropped, as everywhere
     where = {"line_first": usable & lab["line_first"], "newline": usable & lab["newline"],
@@ -541,9 +548,15 @@ def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
                        *((f"L9 transform {t}", tensors["gate/l9"][:n_count, :, j]) for j, t in enumerate(L9_TRANSFORMS))):
         on = gate > 0
         fire[name] = {k: float(on[sel].float().mean()) for k, sel in where.items()}
-        fire[name]["by_chars_in_line"] = {f"{lo}-{lo + CHAR_BIN - 1}": float(on[where["other"] & (lab["chars"] >= lo) & (lab["chars"] < lo + CHAR_BIN)].float().mean())
-                                          for lo in range(0, MAX_CHARS, CHAR_BIN)}
-    return {"shares": shares, "firing_rate": fire, **info}
+        fire[name]["by_chars_in_line"] = {
+            f"{lo}-{lo + CHAR_BIN - 1}": float(on[where["other"] & (lab["chars"] >= lo) & (lab["chars"] < lo + CHAR_BIN)].float().mean())
+            for lo in range(0, MAX_CHARS, CHAR_BIN)}
+    return fire
+
+
+def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
+    """The content of result.json: the shares, the firing rates, and what measure() returned beside the tensors."""
+    return {"shares": shares_by_cell(tensors), "firing_rate": firing_rates(tensors), **info}
 
 
 def print_summary(result: dict) -> None:
