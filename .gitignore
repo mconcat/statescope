@@ -17,3 +17,4 @@ legacy_snapshot2/
 # notes exchanged with other sessions (paths and host details; never committed)
 handoff/
 legacy_snapshot3/
+release_stage2/

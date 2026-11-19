@@ -1,0 +1,400 @@
+"""Line counting in Qwen3.5-0.8B, followed through the released dictionaries: L8 MLP -> L9 GDN head 10 -> L9 MLP.
+
+Task. A text is wrapped to a fixed width. At the last word of a line the model has to predict a line break, so it must know how many
+characters the line already holds. Each item is a pair of 256-token texts that end on the same words: the clean one is wrapped so
+that its last line is full; the corrupt one has the last line break moved (cells "count:W") or all lines wrapped wider (cell
+"width:W"), so that a line break is not due.
+
+Score. m = logsumexp(logits of newline tokens) - logsumexp(logits of tokens that start with a space), at the last token.
+A patch takes one tensor of the clean run and replaces it with a value built from the corrupt run (moved onto the clean run's token
+positions). share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt): the part of the clean/corrupt difference that the
+patched tensor carries. 0 = the patch changes nothing, 1 = the patch alone turns the clean run into the corrupt one.
+
+The chain (found by the original project; this script takes its choice of transform, group and head as given and re-measures):
+  1. L8 MLP dictionary, transform 189 fires on the first token of a line. Its write lies mostly inside the 4-dimensional frame of
+     state group 11586 of resid_post.8 (the "first token of a line" group).
+  2. The model's own L9 mixer reads that: swapping only transform 189's write, or only group 11586, in what the L9 mixer reads moves
+     the answer about as much as swapping the whole L8 MLP output. Inside the L9 mixer, GDN head 10 carries the count.
+  3. L9 MLP dictionary: transform 410 (on while the line is short) and transform 1749 (on once the line is long) turn the count into
+     the line-break decision.
+
+    python demo/line_count.py --release <folder with state/ and mlp/> [--device cuda:0] [--out result_folder]
+
+Needs transformers with Qwen3.5 support; on a GPU also flash-linear-attention (without it the GDN layers run a slow reference kernel).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from dataclasses import dataclass
+from typing import Callable
+
+import torch
+import torch.nn.functional as F
+from safetensors.torch import load_file, save_file
+
+from statescope.config import MODELS, ModelSpec
+from statescope.lm import LanguageModel, load_language_model
+from statescope.reader import PublicMolt, StateVocab
+
+CELLS = ("count:60", "count:100", "width:100")
+COUNT_CELLS = ("count:60", "count:100")
+BATCH = 32
+HEAD = 10                          # GDN head of layer 9 that carries the count
+L8_TRANSFORM, L8_GROUP = 189, 11586
+L9_TRANSFORMS = (410, 1749)
+N_RANDOM_FRAMES = 5
+ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_count_items.safetensors")
+
+Patch = Callable[[torch.Tensor], torch.Tensor]
+
+
+# ---------------------------------------------------------------------------------------------- the model with hooks
+@dataclass
+class Run:
+    """One forward pass over a batch (B, T). Residuals and outputs are fp32 copies of the model's bf16 tensors, raw units."""
+    hidden: torch.Tensor      # (B, T, d) output of the final norm
+    resid_in8: torch.Tensor   # input of layer 8
+    mix8: torch.Tensor        # output of layer 8's mixer
+    mlp8: torch.Tensor        # output of layer 8's MLP
+    post8: torch.Tensor       # resid_post.8 = input of layer 9
+    mixer_in9: torch.Tensor   # what layer 9's mixer receives (after the layer's input norm), model dtype
+    mix9: torch.Tensor        # output of layer 9's mixer
+    mlp9: torch.Tensor        # output of layer 9's MLP
+
+    @property
+    def mid8(self) -> torch.Tensor:
+        return self.resid_in8 + self.mix8
+
+    @property
+    def mid9(self) -> torch.Tensor:
+        return self.post8 + self.mix9
+
+
+class Engine:
+    def __init__(self, lm: LanguageModel) -> None:
+        self.lm = lm
+        self.model, self.layers = lm.model, lm.layers
+        self.final_norm = lm.model.model.norm
+        self.mixer9 = self.layers[9].linear_attn
+        unembed = lm.model.get_output_embeddings().weight
+        text = [lm.tokenizer.decode([i]) for i in range(len(lm.tokenizer))]
+        self.token_text = text
+        self.newline = {i for i, s in enumerate(text) if ("\n" in s or "\r" in s) and s.strip() == ""}
+        space = [i for i, s in enumerate(text) if s.startswith(" ") and "\n" not in s and "\r" not in s]
+        self.W_newline, self.W_space = unembed[sorted(self.newline)].float(), unembed[space].float()
+
+    def margin(self, hidden: torch.Tensor) -> torch.Tensor:
+        """(B, T, d) final hidden states -> (B,) margin at the last token"""
+        h = hidden[:, -1].float()
+        return (h @ self.W_newline.T).logsumexp(1) - (h @ self.W_space.T).logsumexp(1)
+
+    @torch.inference_mode()
+    def run(self, ids: torch.Tensor, patch_mix9: Patch | None = None, patch_mlp9: Patch | None = None) -> Run:
+        got: dict[str, torch.Tensor] = {}
+
+        def first(out):
+            return out[0] if isinstance(out, (tuple, list)) else out
+
+        def keep(name: str):
+            return lambda module, args, out: got.__setitem__(name, first(out))
+
+        def keep_input(name: str):
+            return lambda module, args, kwargs: got.__setitem__(name, args[0] if args else kwargs["hidden_states"])
+
+        def replace(name: str, patch: Patch | None):
+            def hook(module, args, out):
+                t = first(out)
+                got[name] = t
+                if patch is None:
+                    return None
+                new = patch(t).to(t.dtype)                      # a patched tensor is rounded to the model's dtype, like the original
+                return (new, *out[1:]) if isinstance(out, (tuple, list)) else new
+            return hook
+
+        l8, l9 = self.layers[8], self.layers[9]
+        hooks = [l8.register_forward_pre_hook(keep_input("resid_in8"), with_kwargs=True),
+                 l8.linear_attn.register_forward_hook(keep("mix8")), l8.mlp.register_forward_hook(keep("mlp8")),
+                 l9.register_forward_pre_hook(keep_input("post8"), with_kwargs=True),
+                 l9.linear_attn.register_forward_pre_hook(keep_input("mixer_in9"), with_kwargs=True),
+                 l9.linear_attn.register_forward_hook(replace("mix9", patch_mix9)), l9.mlp.register_forward_hook(replace("mlp9", patch_mlp9)),
+                 self.final_norm.register_forward_hook(keep("hidden"))]
+        try:
+            self.model(input_ids=ids, use_cache=False, logits_to_keep=1)
+        finally:
+            for h in hooks:
+                h.remove()
+        return Run(got["hidden"], got["resid_in8"].float(), got["mix8"].float(), got["mlp8"].float(), got["post8"].float(),
+                   got["mixer_in9"], got["mix9"].float(), got["mlp9"].float())
+
+
+# ---------------------------------------------------------------------------------------------- the L9 mixer (a Gated DeltaNet layer) by hand
+def gdn_inputs(mixer, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    """The mixer's own projections of its input x (B, T, d): per head q, k (B, T, H, dk), v, z (B, T, H, dv), g, beta (B, T, H)."""
+    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    B, T, _ = x.shape
+    mixed = mixer.in_proj_qkv(x).transpose(1, 2)
+    z = mixer.in_proj_z(x).reshape(B, T, -1, mixer.head_v_dim)
+    b, a = mixer.in_proj_b(x), mixer.in_proj_a(x)
+    mixed = MQ.causal_conv1d_fn(mixed, mixer.conv1d.weight.squeeze(1), mixer.conv1d.bias, activation=mixer.activation).transpose(1, 2)
+    q, k, v = torch.split(mixed, [mixer.key_dim, mixer.key_dim, mixer.value_dim], dim=-1)
+    q, k = q.reshape(B, T, -1, mixer.head_k_dim), k.reshape(B, T, -1, mixer.head_k_dim)
+    v = v.reshape(B, T, -1, mixer.head_v_dim)
+    beta = b.sigmoid()                                                     # how much of the new value is written
+    g = -mixer.A_log.float().exp() * F.softplus(a.float() + mixer.dt_bias)  # log of the state's decay
+    repeat = mixer.num_v_heads // mixer.num_k_heads
+    if repeat > 1:
+        q, k = q.repeat_interleave(repeat, dim=2), k.repeat_interleave(repeat, dim=2)
+    return {"q": q, "k": k, "v": v, "g": g, "beta": beta, "z": z}
+
+
+def gdn_output(mixer, p: dict[str, torch.Tensor]) -> torch.Tensor:
+    """The mixer's output from its projections: the model's own delta-rule kernel, gated norm and output projection."""
+    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    B, T = p["q"].shape[:2]
+    core, _ = MQ.torch_chunk_gated_delta_rule(p["q"], p["k"], p["v"], g=p["g"], beta=p["beta"], initial_state=None,
+                                              output_final_state=False, use_qk_l2norm_in_kernel=True)
+    core = mixer.norm(core.reshape(-1, mixer.head_v_dim), p["z"].reshape(-1, mixer.head_v_dim)).reshape(B, T, -1)
+    return mixer.out_proj(core)
+
+
+def head_state_read(p: dict[str, torch.Tensor], head: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """One head's recurrence in fp32, token by token: the state S (dk, dv) decays, the delta rule overwrites what key k_t holds
+    with v_t, and the query q_t reads it. Returns the read o (B, T, dv) before the head's norm, and the head's norm gate z."""
+    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    q = MQ.l2norm(p["q"][:, :, head].float(), dim=-1, eps=1e-6)
+    q = q / (q.shape[-1] ** 0.5)
+    k = MQ.l2norm(p["k"][:, :, head].float(), dim=-1, eps=1e-6)
+    v, beta, g = p["v"][:, :, head].float(), p["beta"][:, :, head].float(), p["g"][:, :, head].float()
+    B, T, dk = k.shape
+    S = torch.zeros(B, dk, v.shape[-1], device=k.device, dtype=torch.float32)
+    o = torch.zeros_like(v)
+    for t in range(T):
+        S = S * g[:, t].exp()[:, None, None]
+        held = (S * k[:, t, :, None]).sum(1)
+        S = S + k[:, t, :, None] * ((v[:, t] - held) * beta[:, t, None])[:, None, :]
+        o[:, t] = (S * q[:, t, :, None]).sum(1)
+    return o, p["z"][:, :, head].float()
+
+
+def head_normed(mixer, o: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+    B, T, dv = o.shape
+    dtype = mixer.out_proj.weight.dtype
+    return mixer.norm(o.reshape(-1, dv).to(dtype), z.reshape(-1, dv).to(dtype)).reshape(B, T, dv).float()
+
+
+# ---------------------------------------------------------------------------------------------- pairing, shares, labels
+def onto_clean(corrupt: torch.Tensor, clean: torch.Tensor, pairing: torch.Tensor) -> torch.Tensor:
+    """corrupt, clean (B, T, ...): the corrupt run's values moved onto the clean run's positions. pairing (B, T) gives for each clean
+    position the corrupt position that holds the same word piece, or -1 (then the clean value stays)."""
+    shape = [1] * corrupt.dim()
+    shape[0], shape[1] = corrupt.shape[0], corrupt.shape[1]
+    index = pairing.clamp_min(0).view(*shape).expand_as(corrupt)
+    return torch.where((pairing >= 0).view(*shape), corrupt.gather(1, index), clean)
+
+
+def share(m_clean: torch.Tensor, m_patched: torch.Tensor, m_corrupt: torch.Tensor, n_boot: int = 1000) -> list[float]:
+    """[share, 2.5 %, 97.5 %] with a bootstrap over items (the original's seed and draw)"""
+    num, den = m_clean - m_patched, m_clean - m_corrupt
+    draw = torch.randint(0, len(num), (n_boot, len(num)), generator=torch.Generator().manual_seed(0))
+    ratio = num[draw].mean(1) / den[draw].mean(1)
+    return [float(num.mean() / den.mean()), float(ratio.quantile(0.025)), float(ratio.quantile(0.975))]
+
+
+def token_labels(ids: torch.Tensor, engine: Engine) -> dict[str, torch.Tensor]:
+    """Per token of ids (B, T): chars = characters since the last line break, this token included; newline = is a line-break token;
+    line_first = follows a line-break token; known = a line break has been seen (before that, chars counts from the text's start)."""
+    out: dict[str, list] = {k: [] for k in ("chars", "newline", "line_first", "known")}
+    for row in ids.tolist():
+        chars, seen, after_newline = 0, False, False
+        r: dict[str, list] = {k: [] for k in out}
+        for token in row:
+            s = engine.token_text[token]
+            if "\n" in s:
+                chars, seen = len(s) - s.rfind("\n") - 1, True
+            else:
+                chars += len(s)
+            is_newline = token in engine.newline
+            r["chars"].append(chars), r["newline"].append(is_newline), r["line_first"].append(after_newline), r["known"].append(seen)
+            after_newline = is_newline
+        for k in out:
+            out[k].append(r[k])
+    return {k: torch.tensor(v) for k, v in out.items()}
+
+
+def group_contribution(vocab: StateVocab, x: torch.Tensor, site: str, group: int) -> torch.Tensor:
+    """what state group `group` adds to the raw residual at each token of x (B, T, d): zero where the group is not among the k active"""
+    flat = x.reshape(-1, x.shape[-1])
+    groups, codes = vocab.encode(flat, site)
+    code = (codes * (groups == group)[:, :, None]).sum(1)
+    return vocab.group_write(group, code, site, rms=vocab.token_rms(flat)).view_as(x)
+
+
+def in_frame(frame: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """the part of v (..., d) inside the subspace spanned by the orthonormal rows of frame (b, d)"""
+    return (v @ frame.T) @ frame
+
+
+# ---------------------------------------------------------------------------------------------- the measurement
+@torch.inference_mode()
+def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt, vocab8: StateVocab) -> tuple[dict, dict]:
+    device = engine.lm.device
+    mixer9, site8 = engine.mixer9, "resid_post.8"
+    head_columns = mixer9.out_proj.weight[:, HEAD * mixer9.head_v_dim:(HEAD + 1) * mixer9.head_v_dim].float()
+    frame = vocab8.Q[L8_GROUP]
+    generator = torch.Generator().manual_seed(0)
+    random_frames = [torch.linalg.qr(torch.randn(vocab8.d, 4, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
+    margins: dict[str, list[torch.Tensor]] = {}
+    energy = {"all": 0.0, "group": 0.0, **{f"random{j}": 0.0 for j in range(N_RANDOM_FRAMES)}}
+    gates: dict[str, list[torch.Tensor]] = {"l8": [], "l9": []}
+    labels: dict[str, list[torch.Tensor]] = {}
+
+    def add(cell: str, arm: str, m: torch.Tensor) -> None:
+        margins.setdefault(f"{cell}/{arm}", []).append(m.float().cpu())
+
+    for cell in CELLS:
+        for s in range(0, items[f"{cell}/ids"].shape[0], BATCH):
+            ids = items[f"{cell}/ids"][s:s + BATCH].long().to(device)
+            corrupt_ids = items[f"{cell}/cor"][s:s + BATCH].long().to(device)
+            pairing = items[f"{cell}/pi"][s:s + BATCH].long().to(device)
+            c, x = engine.run(ids), engine.run(corrupt_ids)
+            B, T, d = c.post8.shape
+            add(cell, "m_c", engine.margin(c.hidden))
+            add(cell, "m_x", engine.margin(x.hidden))
+
+            def swap(corrupt: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:
+                return onto_clean(corrupt, clean, pairing) - clean
+
+            def with_mix9(new: torch.Tensor, arm: str) -> None:
+                add(cell, arm, engine.margin(engine.run(ids, patch_mix9=lambda t: new).hidden))
+
+            def with_mlp9(new: torch.Tensor, arm: str) -> None:
+                add(cell, arm, engine.margin(engine.run(ids, patch_mlp9=lambda t: new).hidden))
+
+            # ---- the L9 mixer: its whole output swapped; only head 10's read swapped
+            with_mix9(onto_clean(x.mix9, c.mix9, pairing), "layer_y")
+            o_c, z_c = head_state_read(gdn_inputs(mixer9, c.mixer_in9), HEAD)
+            o_x, _ = head_state_read(gdn_inputs(mixer9, x.mixer_in9), HEAD)
+            d_head = head_normed(mixer9, onto_clean(o_x, o_c, pairing), z_c) - head_normed(mixer9, o_c, z_c)
+            with_mix9(c.mix9 + d_head @ head_columns.T, "head_o")
+
+            # ---- a change of resid_post.8, sent through the model's own L9 mixer only (the residual's direct path stays clean)
+            def mixer9_of(post8: torch.Tensor) -> torch.Tensor:
+                seen = engine.layers[9].input_layernorm(post8.to(c.mixer_in9.dtype))
+                return gdn_output(mixer9, gdn_inputs(mixer9, seen)).float()
+
+            mixer9_clean = mixer9_of(c.post8)
+
+            def through_mixer9(change: torch.Tensor, arm: str) -> None:
+                with_mix9(c.mix9 + mixer9_of(c.post8 + change) - mixer9_clean, arm)
+
+            flat = lambda t: t.reshape(B * T, d)
+            gate8_c, y8_c = molt8.forward(flat(c.mid8))
+            _, y8_x = molt8.forward(flat(x.mid8))
+            w189 = swap(molt8.transform_write(flat(x.mid8), L8_TRANSFORM).view(B, T, d), molt8.transform_write(flat(c.mid8), L8_TRANSFORM).view(B, T, d))
+            through_mixer9(swap(x.post8, c.post8), "l8/full_post8")
+            through_mixer9(swap(x.mlp8, c.mlp8), "l8/mlp8_true")
+            through_mixer9(swap(y8_x.view(B, T, d), y8_c.view(B, T, d)), "l8/molt8_all")
+            through_mixer9(w189, "l8/t189")
+            through_mixer9(swap(group_contribution(vocab8, x.post8, site8, L8_GROUP), group_contribution(vocab8, c.post8, site8, L8_GROUP)), "l8/g11586")
+
+            # how much of transform 189's swapped write lies inside group 11586's frame (position 0 dropped)
+            w = w189[:, 1:]
+            energy["all"] += float(w.pow(2).sum())
+            energy["group"] += float(in_frame(frame, w).pow(2).sum())
+            for j, fr in enumerate(random_frames):
+                energy[f"random{j}"] += float(in_frame(fr, w).pow(2).sum())
+
+            # ---- a change of the L9 MLP output
+            gate9_c, y9_c = molt9.forward(flat(c.mid9))
+            _, y9_x = molt9.forward(flat(x.mid9))
+            with_mlp9(c.mlp9 + swap(x.mlp9, c.mlp9), "l9/mlp9_y")
+            with_mlp9(c.mlp9 + swap(y9_x.view(B, T, d), y9_c.view(B, T, d)), "l9/molt9_all")
+            for t in L9_TRANSFORMS:
+                write_c, write_x = molt9.transform_write(flat(c.mid9), t).view(B, T, d), molt9.transform_write(flat(x.mid9), t).view(B, T, d)
+                with_mlp9(c.mlp9 + swap(write_x, write_c), f"l9/t{t}")
+
+            gates["l8"].append(gate8_c[:, [L8_TRANSFORM]].view(B, T, -1).cpu())
+            gates["l9"].append(gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1).cpu())
+            for k, v in token_labels(ids, engine).items():
+                labels.setdefault(k, []).append(v)
+            print(f"{cell}: items {s}-{s + B - 1} done", flush=True)
+
+    tensors = {f"margin/{k}": torch.cat(v) for k, v in margins.items()}
+    tensors["gate/l8"], tensors["gate/l9"] = torch.cat(gates["l8"]), torch.cat(gates["l9"])
+    tensors.update({f"label/{k}": torch.cat(v).to(torch.int32) for k, v in labels.items()})
+    return tensors, {"energy_fraction_t189_swap": {k: v / energy["all"] for k, v in energy.items() if k != "all"}}
+
+
+def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
+    """shares per cell, arm and half; firing rates of the three transforms on the clean texts of the count cells"""
+    shares: dict[str, dict] = {}
+    for cell in CELLS:
+        m_c, m_x = tensors[f"margin/{cell}/m_c"], tensors[f"margin/{cell}/m_x"]
+        index = torch.arange(len(m_c))
+        halves = {"all": index >= 0, "even": index % 2 == 0, "odd": index % 2 == 1}
+        shares[cell] = {key[len(f"margin/{cell}/"):]: {h: share(m_c[sel], m[sel], m_x[sel]) for h, sel in halves.items()}
+                        for key, m in tensors.items() if key.startswith(f"margin/{cell}/") and not key.endswith(("/m_c", "/m_x"))}
+    n_count = sum(len(tensors[f"margin/{cell}/m_c"]) for cell in COUNT_CELLS)        # the count cells come first
+    lab = {k: tensors[f"label/{k}"][:n_count].bool() if k != "chars" else tensors[f"label/{k}"][:n_count] for k in ("chars", "newline", "line_first", "known")}
+    usable = lab["known"].clone()
+    usable[:, 0] = False                                                              # position 0 is dropped, as everywhere
+    where = {"line_first": usable & lab["line_first"], "newline": usable & lab["newline"],
+             "other": usable & ~lab["line_first"] & ~lab["newline"]}
+    fire: dict[str, dict] = {}
+    for name, gate in ((f"L8 transform {L8_TRANSFORM}", tensors["gate/l8"][:n_count, :, 0]),
+                       *((f"L9 transform {t}", tensors["gate/l9"][:n_count, :, j]) for j, t in enumerate(L9_TRANSFORMS))):
+        on = gate > 0
+        fire[name] = {k: float(on[sel].float().mean()) for k, sel in where.items()}
+        fire[name]["by_chars_in_line"] = {f"{lo}-{lo + 9}": float(on[where["other"] & (lab["chars"] >= lo) & (lab["chars"] < lo + 10)].float().mean())
+                                          for lo in range(0, 100, 10)}
+    return {"shares": shares, "firing_rate": fire, **info}
+
+
+def print_summary(result: dict) -> None:
+    rows = [("L9 mixer, whole output", "layer_y"), (f"L9 mixer, head {HEAD} only", "head_o"),
+            ("resid_post.8, whole -> L9 mixer", "l8/full_post8"), ("L8 MLP output -> L9 mixer", "l8/mlp8_true"),
+            ("L8 dictionary, all transforms -> L9 mixer", "l8/molt8_all"), (f"L8 transform {L8_TRANSFORM} -> L9 mixer", "l8/t189"),
+            (f"state group {L8_GROUP} -> L9 mixer", "l8/g11586"),
+            ("L9 MLP output", "l9/mlp9_y"), ("L9 dictionary, all transforms", "l9/molt9_all"),
+            *((f"L9 transform {t}", f"l9/t{t}") for t in L9_TRANSFORMS)]
+    print("\nshare of the clean/corrupt margin difference carried by each swap (even-numbered items; all items in brackets)")
+    print(f"{'':46s}" + "".join(f"{cell:>18s}" for cell in CELLS))
+    for name, arm in rows:
+        cells = [result["shares"][cell][arm] for cell in CELLS]
+        print(f"{name:46s}" + "".join(f"{v['even'][0]:>10.3f} ({v['all'][0]:.3f})" for v in cells))
+    fraction = result["energy_fraction_t189_swap"]
+    print(f"\nenergy of transform {L8_TRANSFORM}'s swapped write inside the 4-dimensional frame of group {L8_GROUP}: {fraction['group']:.3f}"
+          f"   (random 4-dimensional frames: at most {max(v for k, v in fraction.items() if k.startswith('random')):.3f})")
+    print("\nfiring rate on the clean texts of the count cells")
+    for name, rates in result["firing_rate"].items():
+        print(f"  {name:18s} line-first tokens {rates['line_first']:.3f}   line breaks {rates['newline']:.3f}   other tokens {rates['other']:.3f}")
+        print("    other tokens by characters in the line so far: " + "  ".join(f"{k}: {v:.2f}" for k, v in rates["by_chars_in_line"].items()))
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--release", required=True, help="folder that holds state/L<L>/ and mlp/L<L>/ of the published set")
+    ap.add_argument("--model", default=MODELS["qwen3.5-0.8b"].hf_id, help="Hugging Face id or local folder of Qwen3.5-0.8B")
+    ap.add_argument("--device", default="cuda:0")
+    ap.add_argument("--items", default=ITEMS, help="the 3 x 64 item pairs (token ids and pairing)")
+    ap.add_argument("--out", default=None, help="folder for result.json (shares, firing rates) and result.safetensors (per-item margins, gates)")
+    args = ap.parse_args()
+    spec = MODELS["qwen3.5-0.8b"]
+    engine = Engine(load_language_model(ModelSpec(spec.name, args.model, spec.d_model, spec.n_layers), device=args.device))
+    molt8 = PublicMolt(os.path.join(args.release, "mlp", "L8"), device=args.device)
+    molt9 = PublicMolt(os.path.join(args.release, "mlp", "L9"), device=args.device)
+    vocab8 = StateVocab(os.path.join(args.release, "state", "L8"), device=args.device)
+    tensors, info = measure(engine, load_file(args.items), molt8, molt9, vocab8)
+    result = summarize(tensors, info)
+    print_summary(result)
+    if args.out is not None:
+        os.makedirs(args.out, exist_ok=True)
+        save_file(tensors, os.path.join(args.out, "result.safetensors"))
+        with open(os.path.join(args.out, "result.json"), "w") as f:
+            json.dump(result, f, indent=1)
+
+
+if __name__ == "__main__":
+    main()

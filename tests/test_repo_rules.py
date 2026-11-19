@@ -7,7 +7,7 @@ import subprocess
 
 from conftest import REPO
 
-SOURCE_DIRS = ("src", "examples")
+SOURCE_DIRS = ("src", "examples", "demo")
 LEGACY_PACKAGES = {"train", "measure", "gpt2", "tools"}
 # `except` clauses that are allowed, each for a stated reason. Everything else in the package must let errors propagate.
 ALLOWED_EXCEPT = {

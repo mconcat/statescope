@@ -291,7 +291,9 @@ without training-time paths, `MANIFEST.json`), layers 0-22 from the exports R8 r
 post_norm=<rebuilt file>)` holds, and `eps` is equal. With (b), R8.3-R8.5 carry over to these layers without a new reference run.
 (c) Layer 23: R8.3, R8.4 and R8.5 as written, with the release folder as the export and its own `postnorm.safetensors`.
 (d) No safetensors header and no config of the release folder, and no `cfg.json` or header of the 24 state dictionaries, contains
-`/home/`, `/mnt/`, `/root/`, `/workspace`, a host name of the lab or an IPv4 address.
+an absolute path under a home, mount, root or workspace folder, a host name of the lab or an IPv4 address (the patterns are in
+`tests/test_release2.py`; this sentence named the path prefixes literally when it was written, which this repository's own rule
+against committed machine paths rejects, so it was reworded on the same day without changing what is checked).
 The state dictionaries of the frozen set are the 24 folders R8.1-R8.2 read; nothing new is checked for them here.
 
 ## R9. Line-count demonstration (written 2026-11-19, before the reference script or the port was run)
@@ -329,6 +331,16 @@ within 0.005 of the record where one exists.
 **R9.5 Reported, not pass/fail.** The largest per-item margin difference between the new script and the reference, per arm; the same
 between two runs of the reference (run-to-run repeatability of the original code); peak GPU memory. Prediction: unpatched margins
 are bit-identical, every share difference is below 0.001.
+
+*Result of the first run (2026-11-19, added after it; the rules above are unchanged).* R9.1-R9.4 passed on the first run. Both
+predictions of R9.5 missed. (1) Unpatched margins are not bit-identical: they differ by up to 2e-5 (the reference sums the logits in
+vocabulary chunks). (2) The largest share difference is 0.0030, not below 0.001. The arms that swap a tensor of the model itself agree
+to 2e-5 per item; the arms that swap something a dictionary computed (a transform's write, a group's contribution) differ by up to
+0.097 per item. Cause, checked directly: the two implementations of a dictionary differ at about 1e-6 relatively, and the patched
+tensor is then rounded to bf16; multiplying such a change by 1 + 1e-6 x noise before the rounding flips about 1,600 of 8.4 million bf16
+elements of one batch and moves single items' margins by 0.04-0.09 (three draws each at 1e-7, 1e-6, 1e-5; the same input twice gives
+0). Two runs of the reference are bit-identical in every margin. So single-item margins of dictionary arms are reproducible only to
+about 0.1, and shares over 32 or 64 items to about 0.003.
 
 Not covered by R9: everything in the note that passes through the GDN dictionary's registers; the selection of the transforms and
 groups (the demonstration takes the original's choices as given and says so); other cells, seeds or models.

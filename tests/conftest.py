@@ -56,6 +56,8 @@ class Settings:
     snapshot2: Path = REPO / "legacy_snapshot2"   # frozen reference code of the second design
     molt2_root: Path | None = None  # second design, MLP dictionaries: holds L<layer>/export/{weights.safetensors, config.yaml}
     molt2_reexports: Path | None = None   # holds the two layer-9 exports in the later format (old_corpus_L9_pub128{,_post}/L9/export)
+    snapshot3: Path = REPO / "legacy_snapshot3"   # frozen reference code of the line-count demonstration
+    release2: Path | None = None    # the frozen second-design set as published: state/L<L>/, mlp/L<L>/, MANIFEST.json
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
@@ -76,6 +78,16 @@ class Settings:
         if not (self.snapshot2 / "SHA256SUMS").is_file():
             pytest.fail(f"no frozen snapshot of the second design at {self.snapshot2} (make one with devtools/freeze_design2.py)", pytrace=False)
         return self.snapshot2
+
+    def need_snapshot3(self) -> Path:
+        if not (self.snapshot3 / "SHA256SUMS").is_file():
+            pytest.fail(f"no frozen snapshot of the demonstration at {self.snapshot3} (make one with devtools/freeze_demo.py)", pytrace=False)
+        return self.snapshot3
+
+    def need_release2(self) -> Path:
+        if self.release2 is None or not (self.release2 / "MANIFEST.json").is_file():
+            pytest.fail("STATESCOPE_RELEASE2 is not set or has no MANIFEST.json (make the folder with devtools/stage_release2.py)", pytrace=False)
+        return self.release2
 
     def vocab2_dir(self, layer: int) -> Path:
         """second design: export folder of a layer's state dictionary in the original results"""
@@ -124,6 +136,8 @@ def settings() -> Settings:
         snapshot2=_path_or_none("STATESCOPE_SNAPSHOT2") or REPO / "legacy_snapshot2",
         molt2_root=_path_or_none("STATESCOPE_MOLT2_ROOT"),
         molt2_reexports=_path_or_none("STATESCOPE_MOLT2_REEXPORTS"),
+        snapshot3=_path_or_none("STATESCOPE_SNAPSHOT3") or REPO / "legacy_snapshot3",
+        release2=_path_or_none("STATESCOPE_RELEASE2"),
     )
 
 
