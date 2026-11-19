@@ -16,7 +16,7 @@ These files provide two dictionaries for every layer of Qwen3.5-0.8B and a Pytho
 
 ### An example: how the model decides to break a line
 
-With text wrapped at a fixed width, the model must place line breaks by tracking how long the current line is.
+With text wrapped at a fixed width, the model must place line breaks by tracking how long the current line is. The task comes from Gurnee et al. (2026), who studied how Claude 3.5 Haiku does this. Here we follow it in a different model, Qwen3.5-0.8B, where one head of a GatedDeltaNet layer carries the count.
 
 1. Layer-8 transform 189 fires on the first token of a line.
 2. State group 11586 holds most of that signal.
@@ -355,7 +355,7 @@ Re-measured shares on even-numbered items, 32 per cell. Rows identify mixer-outp
 
 The part inside group 4885's frame moves the transforms about as much as the whole swap. For the whole mixer swap, the rest carries 0.016, 0.032 and 0.042 through the six transforms in `count:60`, `count:100` and `width:100`, respectively; through the two transforms, it carries 0.013, 0.052 and 0.031. A random 4-dimensional frame carries at most 0.005 through six transforms and 0.007 through two. With everything downstream, the rest carries 0.156, 0.168 and 0.177 in those cells. Other routes therefore reach the answer, and the parts' downstream shares do not add up to the whole.
 
-We registered the pass rule before measurement: in both count cells, the frame retains at least 0.75 of the whole share; the rest retains at most 0.25 of it and at most 0.05; random frames carry at most 0.01. The rule held through the six transforms and held only in part through 410 and 1749, where the rest in `count:100` was 0.051 in that comparison. Group 4885 is a dense 4-dimensional coordinate group active on most tokens; its coordinates carry information. The same computation is also visible in individual MLP neurons.
+We registered the pass rule before measurement: in both count cells, the frame retains at least 0.75 of the whole share; the rest retains at most 0.25 of it and at most 0.05; random frames carry at most 0.01. The rule held through the six transforms and held only in part through 410 and 1749, where the rest in `count:100` was 0.051 in that comparison. Group 4885 is a dense 4-dimensional coordinate group active on most tokens; its coordinates carry information. In a separate measurement with the published reader, we averaged group 4885's code (its 4 coordinates) by the number of characters the line already holds, over the 48,960 tokens of the demonstration's clean texts. The group is active on 0.816 of those tokens, and its mean code traces a smooth curve as the line fills: two principal components carry 0.97 of the curve's variance for the texts wrapped at 60 characters and 0.99 for those wrapped at 100. Curves computed separately from the even-numbered and the odd-numbered items correlate 0.9945 and 0.9963. The count is thus a position along a curve that lies almost in a plane inside the group's 4-dimensional frame. The same computation is also visible in individual MLP neurons.
 
 ### How the published files were checked
 
@@ -377,3 +377,5 @@ In `cfg.json`, `kind: state_dictionary` is the format tag; `form: bsf`, `gate: t
 The code and dictionary weights use MIT. The separately loaded `Qwen/Qwen3.5-0.8B` base model (revision `2fc06364715b967f1860aea9cf38778875588b17`) uses Apache 2.0; `capture` takes a model loaded by the caller. Its copied norm values in `postnorm.safetensors` also come from the Apache-2.0-licensed model: `w_eff` has 1,024 values equal to 1 plus the layer's norm weight, with `eps = 1e-06`. Other tensors were trained on residual activations or MLP inputs and outputs.
 
 The MLP form and trainer come from MIT-licensed `crosslayer-transcoder` (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange. The demonstration texts come from `HuggingFaceFW/fineweb-edu` under the Open Data Commons Attribution License (ODC-By 1.0).
+
+The line-break task was studied by Wes Gurnee, Emmanuel Ameisen, Isaac Kauvar, Julius Tarng, Adam Pearce, Chris Olah and Joshua Batson, in "When Models Manipulate Manifolds: The Geometry of a Counting Task", arXiv:2601.04480 (8 January 2026), https://arxiv.org/abs/2601.04480.
