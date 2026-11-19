@@ -17,8 +17,6 @@ statescope contains a reader for per-layer dictionaries of `Qwen/Qwen3.5-4B` and
 | `Qwen/Qwen3.5-4B` | 32 | 2,560 | 16,384 / 24 | 9,920 | About 168 GiB | [mconcat/statescope-qwen3.5-4b](https://huggingface.co/mconcat/statescope-qwen3.5-4b) |
 | `Qwen/Qwen3.5-0.8B` | 24 | 1,024 | 16,384 / 24 | 3,968 | About 27.4 GiB | [mconcat/statescope-qwen3.5-0.8b](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b) |
 
-The 0.8B base model's revision is `2fc06364715b967f1860aea9cf38778875588b17`. The 0.8B set was frozen on 2026-11-18.
-
 A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output.
 
 By design, the mixers are read directly at the level of the model's own heads and channels. We also trained a stateful transcoder, a dictionary with a state carried across tokens, on 18 GatedDeltaNet layers of the 0.8B model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer. Attention is read at the level of heads.
@@ -261,6 +259,8 @@ The pass/fail rules were written down before the comparisons were run and are in
 - The 4B usage lines were run once on the 4B model.
 
 ## License and credits
+
+The dictionaries were trained on `Qwen/Qwen3.5-4B` at revision `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a` and on `Qwen/Qwen3.5-0.8B` at revision `2fc06364715b967f1860aea9cf38778875588b17`.
 
 The code is licensed under MIT in `LICENSE`. The dictionary weights in the Hugging Face repository are released under MIT, as stated by the model card's `license: mit`. The base model `Qwen/Qwen3.5-0.8B` is licensed under the Apache License, Version 2.0. The base model is not part of this set and is not redistributed here.
 
