@@ -21,7 +21,8 @@ ALLOWED_EXCEPT: set[tuple[str, str]] = set()
 # (file, matched text) pairs that are allowed, each for a stated reason
 ALLOWED_STRINGS = {
     ("README.md", "mconcat"),                                     # the public address of the weights repository
-    ("release/qwen35-08b-v2/MODEL_CARD.md", "mconcat"),           # the public address of the code repository
+    ("release/qwen35-08b-v2/MODEL_CARD.md", "mconcat"),           # the public addresses of the code and weights repositories
+    ("release/qwen35-4b/MODEL_CARD.md", "mconcat"),               # the same, in the 4B set's card
 }
 FORBIDDEN = [r"/home/", r"/mnt/", r"\b10\.42\.\d", r"\b192\.168\.\d", r"\bprocessor\b", r"\bworkstation\b", r"\bmconcat\b"]
 READER = REPO / "src" / "statescope" / "reader.py"
