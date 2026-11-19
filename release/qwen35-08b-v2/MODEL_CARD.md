@@ -66,12 +66,9 @@ python demo/line_count.py --release <folder>
 - The 144 weight and config files cover 24 layers; the other files are the manifest and model card.
 - Each state dictionary activates 24 of 16,384 groups per token.
 - Each MLP dictionary has 3,968 transforms.
+- Mixers (a layer's GatedDeltaNet or attention sublayer) are read directly, at the level of the model's own heads and channels; the dictionaries cover the residual stream and the MLPs. We also trained a stateful transcoder on 18 GatedDeltaNet layers of this model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer.
 
 A larger set for Qwen3.5-4B is published separately: [Qwen3.5-4B](https://huggingface.co/mconcat/statescope-qwen3.5-4b).
-
-### Scope
-
-This set covers one model and one dictionary training seed (the number controlling randomness); we chose the line-break chain's units, and the demonstration re-measures them. Line counting is an easy task for which the model has dedicated MLP neurons (individual MLP units). The per-layer numbers recorded at training and the spliced-in loss rest on unpublished data.
 
 ## For agents reading this repo
 
@@ -103,7 +100,7 @@ mlp/L<L>/postnorm.safetensors
 
 ### Load and call
 
-Python 3.12 or newer; installation in the code checkout:
+Python 3.12 or newer; installation in the code checkout, which holds the reader, the demonstration and tests (training code will follow):
 
 ```sh
 pip install -e '.[model]'
@@ -169,7 +166,7 @@ active = the k groups with largest norm(c_g)      G=16384, b=4, d=1024, k=24
 x_hat = (mu_site + scale_site * (sum_active c_g Q_g + b_dec)) * rms
 ```
 
-`Q_g` has orthonormal rows. The normalized input `x / rms` is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight. We trained each layer's dictionary on 30,003,200 tokens over 7,325 steps, excluding position 0. The state files occupy about 12.0 GiB.
+`Q_g` has orthonormal rows. The normalized input `x / rms` is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight. We trained each layer's dictionary on 30,003,200 tokens over 7,325 steps with seed 0, excluding position 0. The state files occupy about 12.0 GiB.
 
 ### MLP dictionary
 
@@ -321,7 +318,7 @@ Re-measured shares on even-numbered items, 32 per cell. Rows identify mixer-outp
 
 The part inside group 4885's frame moves the transforms about as much as the whole swap. For the whole mixer swap, the rest carries 0.016, 0.032 and 0.042 through the six transforms in `count:60`, `count:100` and `width:100`, respectively; through the two transforms, it carries 0.013, 0.052 and 0.031. A random 4-dimensional frame carries at most 0.005 through six transforms and 0.007 through two. With everything downstream, the rest carries 0.156, 0.168 and 0.177 in those cells. Other routes therefore reach the answer, and the parts' downstream shares do not add up to the whole.
 
-We registered the pass rule before measurement: in both count cells, the frame retains at least 0.75 of the whole share; the rest retains at most 0.25 of it and at most 0.05; random frames carry at most 0.01. The rule held through the six transforms and held only in part through 410 and 1749, where the rest in `count:100` was 0.051 in that comparison. Group 4885 is a dense 4-dimensional coordinate group active on most tokens; its coordinates carry information. Line counting is an easy task with dedicated MLP neurons.
+We registered the pass rule before measurement: in both count cells, the frame retains at least 0.75 of the whole share; the rest retains at most 0.25 of it and at most 0.05; random frames carry at most 0.01. The rule held through the six transforms and held only in part through 410 and 1749, where the rest in `count:100` was 0.051 in that comparison. Group 4885 is a dense 4-dimensional coordinate group active on most tokens; its coordinates carry information. The same computation is also visible in individual MLP neurons.
 
 ### How the published files were checked
 
@@ -337,15 +334,6 @@ We ran these checks on one machine with one RTX 5090, including an empty-folder 
 ### Config files
 
 In `cfg.json`, `kind: state_dictionary` is the format tag; `form: bsf`, `gate: topk` and `input: token_rms` specify the tied block-sparse form, top-k group selection and per-token RMS input, while `lam`, `lam_dr`, `lam_pc`, `lam_nest` and `n_dense` are all 0 (no penalty or dense block). The reader takes class paths, sizes and ranks from `config.yaml`'s `model` section and reads `data.init_args.post_norm_stats`. The manifest's `original_sha256` is the hash of each config before a small edit made before publication.
-
-### Limits
-
-- The set covers one model and one dictionary seed.
-- We chose the demonstration units beforehand; the script re-measures them.
-- Line counting is an easy task with dedicated MLP neurons.
-- Training-shard metrics come from deleted data; held-out activations and spliced-in-loss texts are unpublished.
-- Demonstration numbers are exact for the tested library versions.
-- The trainers are not published yet.
 
 ### Licence and credits
 

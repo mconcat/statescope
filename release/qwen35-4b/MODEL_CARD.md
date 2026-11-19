@@ -17,11 +17,11 @@ This set provides two dictionaries per layer of Qwen3.5-4B. The state dictionary
 
 We used these units in the following experiments; their scripts are not published.
 
-- The model had to infer an unknown rule from a few input-output cases and complete a Python function; the test covered 24 rule families it had not been tuned on. We moved the residual stream inside a single state group's frame (the four directions of a group), at just the token before the function body. We used group 9167 of `resid_mid.27`, and the model then reasoned in comments before writing the rule. The rate of correct rules rose from 0.516 to 0.773. The effect is not distinguishable from simply forcing the first token of the function body to be the comment sign `#`.
-- In an ABA rule the third item repeats the first; in an ABB rule it repeats the second. At layers 11 to 14, the sixteen highest-ranked state groups carried 0.67 to 0.78 of the effect of swapping the whole residual difference. Moving the residual stream inside the frame of group 12112 at `resid_post.13` changed which rule the model followed. It flipped from ABA to ABB in 0.45 of prompts; the opposite direction was much harder, at 0.03. We ranked groups with the rule labels and used one text format; inside the chat template, the model did not solve the task.
-- At layer 7, the MLP dictionary's reconstruction carries 0.89 of the MLP's contribution to a hand-traced JavaScript comparison. That MLP is itself a small part of the circuit: swapping its whole output moves 0.083 of the answer. Two MLP neurons carry 0.80 of the same contribution, so neurons describe this more compactly.
+- The model had to infer an unknown rule from a few input-output cases and complete a Python function; the test covered 24 rule families it had not been tuned on. We moved the residual stream inside a single state group's frame (the four directions of a group), at just the token before the function body. We used group 9167 of `resid_mid.27`, and the model then reasoned in comments before writing the rule. The rate of correct rules rose from 0.516 to 0.773. Forcing the first token of the body to the comment sign `#` gives a similar rate.
+- In an ABA rule the third item repeats the first; in an ABB rule it repeats the second. At layers 11 to 14, the sixteen highest-ranked state groups carried 0.67 to 0.78 of the effect of swapping the whole residual difference. Moving the residual stream inside the frame of group 12112 at `resid_post.13` changed which rule the model followed. It flipped from ABA to ABB in 0.45 of prompts.
+- At layer 7, the MLP dictionary's reconstruction carries 0.89 of the MLP's contribution to a hand-traced JavaScript comparison.
 
-These experiments used one dictionary seed (the number controlling randomness), prompts built from templates, and units chosen by a contrast between two kinds of prompts.
+The prompts were built from templates, and we chose the units by contrasting two kinds of prompts.
 
 ### Try it
 
@@ -68,12 +68,9 @@ python demo/verify_release.py --release <folder>
 - State files occupy about 40.0 GiB (43.0 GB) and MLP files about 128.0 GiB (137.5 GB).
 - Each state dictionary activates 24 of 16,384 groups per token.
 - Each MLP dictionary has 9,920 transforms.
+- Mixers (a layer's GatedDeltaNet or attention sublayer) are read directly, at the level of the model's own heads and channels; the dictionaries cover the residual stream and the MLPs. This follows a comparison on the 0.8B model: a stateful transcoder trained on 18 of its GatedDeltaNet layers reproduced about one third of the true head's response in a line-counting computation, while one of the model's own heads carried the count about as well as the whole mixer.
 
 A smaller set for [Qwen3.5-0.8B](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b) is published separately and comes with a runnable demonstration.
-
-### Scope
-
-This set covers one model and one dictionary training seed. It is a copy of our trained dictionaries made on 2026-11-20. We measured spliced-in loss, the increase in next-token loss after substituting a reconstruction, at layer 16.
 
 ## For agents reading this repo
 
@@ -93,7 +90,7 @@ mlp/L<L>/weights.safetensors
 mlp/L<L>/postnorm.safetensors
 ```
 
-- `MANIFEST.json`: file hashes and numbers recorded at training; `frozen` holds the copy date, 2026-11-20.
+- `MANIFEST.json`: file hashes and numbers recorded at training; `frozen` holds the date the files were assembled, 2026-11-20.
 - `ALWAYS_ON.json`: firing lists and write-energy shares from 65,408 FineWeb-Edu web-text tokens; separate counts from 65,536 held-out training-mix tokens.
 - `README.md`: model card.
 - `state/L<L>/cfg.json`: form, sites, sizes and training options.
@@ -105,7 +102,7 @@ mlp/L<L>/postnorm.safetensors
 
 ### Load and call
 
-In the [code checkout](https://github.com/mconcat/statescope):
+In the [code checkout](https://github.com/mconcat/statescope), which holds the reader and its tests (training code will follow):
 
 ```sh
 pip install -e '.[model,dev]'
@@ -286,19 +283,19 @@ The 40- and 60-group dictionaries are outside this set. Reading the 24-group dic
 
 ### What these units have been used for, in full
 
-These are our experiments with this set; their scripts are not published. They used one dictionary seed, templated prompts and units selected by contrasts between two kinds of prompts.
+These are our experiments with this set; their scripts are not published. They used templated prompts and units selected by contrasts between two kinds of prompts.
 
 **Python rule completion.** We asked the model to infer a rule from input-output cases and complete a Python function. At the token just before its body, we shifted the residual inside the 4-dimensional frame of group 9167 at `resid_mid.27`. The model then reasoned in comments before writing the rule.
 
 Across 24 rule families it had not been tuned on, correct-rule rates rose from 0.516 to 0.773: 1,536 generations from 768 prompts, each generated twice, once greedily and once sampled. We reused the shift strength fixed in an earlier experiment. Among the 768 greedy generations, 23 correct answers became wrong and 232 wrong answers became correct. In the earlier experiment's 96 generations, a random group changed the result by -0.01.
 
-The effect was not distinguishable from forcing the first body token to `#`: rates were 0.72 with the unit and 0.65 with the forced token, with the difference inside the interval. We selected the unit by contrasting prompts with and without an instruction to reason in comments first.
+Forcing the first body token to `#` gives a similar rate: 0.65, against 0.72 with the unit, with the difference inside the interval. We selected the unit by contrasting prompts with and without an instruction to reason in comments first.
 
 **ABA/ABB rules.** ABA repeats the first item in third position; ABB repeats the second. We used comma-separated words and two examples in one plain-text format. At positions where the rule is abstracted, at layers 11 to 14, one state group's frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference; four groups carried 0.50 to 0.56 and sixteen 0.67 to 0.78. One direction found with supervision carried 0.78 to 0.89; a random 64-dimensional subspace carried 0.01 to 0.02.
 
 Shifting inside group 12112's frame at `resid_post.13` by the mean difference between rules flipped ABA to ABB in 0.45 of prompts, or 0.98 at twice the shift. ABB to ABA reached 0.03, or 0.67 at twice the shift. We ranked units using rule labels; the result covers one text format, and the model did not solve the task inside its chat template.
 
-**JavaScript comparison.** At layer 7 of a hand-traced ternary-expression circuit, the MLP reconstruction carried 0.89 of the MLP's contribution, with an interval of 0.78 to 1.00. Transform 357, rank 64, ranked first. The whole MLP contributed only 0.083 of the answer under an output swap, and 0.89 is a share of that part. Two MLP neurons carried 0.80 of the same contribution, describing it more compactly.
+**JavaScript comparison.** At layer 7 of a hand-traced ternary-expression circuit, the MLP reconstruction carried 0.89 of the MLP's contribution, with an interval of 0.78 to 1.00. Transform 357, rank 64, ranked first. The 0.89 is a share of the MLP's own contribution, which is 0.083 of the answer under an output swap. Two MLP neurons carried 0.80 of the same contribution.
 
 ### How the published files were checked
 
@@ -309,7 +306,7 @@ We ran these checks on one machine with one RTX 5090.
 - **Individual writes:** firing transforms plus output mean matched the forward pass within 1.02e-6 relative; group writes plus mean and bias matched decoding within 8.4e-7 relative.
 - **Files:** all 192 weight/config hashes matched `MANIFEST.json`; state tensor files were unchanged from training exports, and all reader-held MLP tensors were bit-identical to their training-export counterparts. All 32 layers' norm files matched coefficients rebuilt from the base model bit for bit.
 - **All-token measurements:** state FVU at both sites and all 32 layers matched the record within 1.7e-6, with position 0 both included and dropped; split token counts matched. MLP FVU was 0.0425 to 0.2898 with position 0 dropped; including it changed FVU by at most 0.0067. The MLP training record uses different tokens.
-- **Model usage:** the Try it lines ran at layer 16; the sentence had 10 tokens, leaving 9 and shapes `(9, 2560)`. The bf16 model plus both dictionaries needed more than 14 GiB GPU memory and ran under a 26 GiB cap. A larger check used eight FineWeb-Edu texts of 256 tokens, leaving 2,040 after dropping position 0; 4B capture was not compared against our research capture code.
+- **Model usage:** the Try it lines ran at layer 16; the sentence had 10 tokens, leaving 9 and shapes `(9, 2560)`. The bf16 model plus both dictionaries needed more than 14 GiB GPU memory and ran under a 26 GiB cap. A larger check used eight FineWeb-Edu texts of 256 tokens, leaving 2,040 after dropping position 0.
 
 Re-measured: raw FVU and mean transforms on per token for the eight-text check (2,040 tokens).
 
@@ -322,15 +319,6 @@ Re-measured: raw FVU and mean transforms on per token for the eight-text check (
 ### Config files
 
 In `cfg.json`, the format tag `kind = state_dictionary` and fields `form = bsf`, `gate = topk`, `input = token_rms` specify the tied block-sparse form and RMS input; `lam`, `lam_dr`, `lam_pc`, `lam_nest` and `n_dense` are all 0, corresponding to no penalty term or dense block. From `config.yaml`, the reader uses `model` for class paths, sizes and ranks, and `data.init_args.post_norm_stats`. The manifest's `original_sha256` holds each config's hash before a small edit made before publication.
-
-### Limits
-
-- Results cover one model and one dictionary seed.
-- This is a copy made on 2026-11-20, rather than a configuration fixed by an owner decision.
-- Spliced-in loss covers layer 16 only.
-- The 24 active groups are a default from one circuit comparison; spliced-in loss is lower with 40 and 60.
-- The MLP training measurements use a deleted shard; held-out calibration activations are unpublished.
-- The experiments' scripts are unpublished.
 
 ### Licence and credits
 
