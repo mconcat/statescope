@@ -3,6 +3,10 @@
 Machine-specific paths come from the environment, or from `tests/local.env` (not committed; see `tests/local.env.example`). A test that
 needs a value that is not set FAILS with a message naming it; nothing is skipped silently. Tests that need private data carry the
 markers `release` / `legacy`, so they can be left out on purpose with `-m "not release and not legacy"`.
+
+Names. "second design" and the suffix 2 (snapshot2, molt2_*, release2, test_reader2.py, test_release2.py) mean the published set.
+Names without a suffix (release_root, legacy_snapshot, test_reader.py, the training tests) mean the earlier design, which
+tests/EQUIVALENCE_RULES.md calls the first design. snapshot3 and test_demo.py are the line-count demonstration.
 """
 from __future__ import annotations
 
@@ -45,7 +49,7 @@ if os.environ.get("STATESCOPE_HF_HOME"):
 
 @dataclass(frozen=True)
 class Settings:
-    release_root: Path | None       # holds layers/Lxx/{vocab,molt}/
+    release_root: Path | None       # earlier design: holds layers/Lxx/{vocab,molt}/
     legacy_results: Path | None     # `results` folder of the original repository (read only)
     legacy_snapshot: Path           # frozen copy of the original code
     device: str

@@ -14,6 +14,10 @@ from statescope.reader import MoltOps, PublicMolt, StateVocab, capture, fvu, wri
 from synthetic import POST_NORM_EPS, RMS_EPS, write_molt, write_public_molt, write_vocab
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------
+# earlier design, MLP dictionary: MoltOps
+# ---------------------------------------------------------------------------------------------------------------------------------
+
 def _molt_reference(t: dict[str, torch.Tensor], x: torch.Tensor, eps: float = 1e-6) -> tuple[torch.Tensor, torch.Tensor]:
     """the docstring formulas of MoltOps, atom by atom, in float64: returns (gate values (n, T), y (n, d))"""
     t = {k: v.double() if v.is_floating_point() else v for k, v in t.items()}
@@ -80,6 +84,10 @@ def test_an_edited_gate_changes_the_output_by_that_atoms_write(tmp_path):
     _, y_without = molt.forward(x, edited)
     assert torch.allclose(y - y_without, molt.atom_write(x, atom), atol=1e-4)
 
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# state dictionary reading the raw residual (earlier design's form); fvu
+# ---------------------------------------------------------------------------------------------------------------------------------
 
 def test_vocab_selects_the_k_groups_with_the_largest_written_norm(tmp_path):
     write_vocab(tmp_path / "vocab", layer=3)
