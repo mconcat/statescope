@@ -1,5 +1,7 @@
 # statescope
 
+> **This is the branch `earlier-design`.** It keeps the code and tests of an earlier, unpublished design (an untied state dictionary and an M1w MLP dictionary) as they were on 2026-11-20, when that code left the main branch. This code did not train the published weights. The reader on this branch reads the earlier design's files; it does not read the published weights' config files, which were edited afterwards. To use the published weights, use the main branch. The rest of this file is the README as it was at that time.
+
 statescope is a reader in one Python file and a set of dictionary weights for `Qwen/Qwen3.5-0.8B`, with one state dictionary for two residual stream sites and one MLP dictionary of 3,968 gated low-rank transforms at each of the 24 layers.
 
 **You can reproduce**
