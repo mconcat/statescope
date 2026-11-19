@@ -76,7 +76,7 @@ mlp/L<L>/weights.safetensors
 mlp/L<L>/postnorm.safetensors
 ```
 
-The set contains 144 files. State dictionaries occupy about 13 GiB, and MLP dictionaries occupy about 16 GiB. The manifest records a sha256 for each layer's files and numbers recorded at training time. This command checks all 144 files against the manifest:
+The set contains 144 files. State dictionaries occupy about 12.0 GiB, and MLP dictionaries occupy about 15.4 GiB. The manifest records a sha256 for each layer's files and numbers recorded at training time. This command checks all 144 files against the manifest:
 
 ```sh
 python demo/verify_release.py --release <folder>

@@ -91,7 +91,7 @@ def main() -> None:
     for layer in range(args.layers):
         layers[str(layer)] = measure_layer(layer, args.release, args.calib_root / f"{args.calib_name}{layer}", args.device)
         row = layers[str(layer)]
-        print(layer, {k: round(v["position_0_dropped"], 4) for k, v in row.items() if isinstance(v, dict)}, flush=True)
+        print(layer, {k: round(v["position_0_dropped"], 4) for k, v in row.items() if k != "tokens_per_split" and isinstance(v, dict)}, flush=True)
         torch.cuda.empty_cache()
     out = {"what": "FVU in raw units on all held-out tokens of the original project's four held-out splits per layer, read with statescope.reader",
            "splits": list(HELDOUT_SPLITS), "layers": layers}
