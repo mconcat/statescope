@@ -1,6 +1,6 @@
 # statescope
 
-statescope is a reader in one Python file and a set of dictionary weights for `Qwen/Qwen3.5-0.8B`, with one state dictionary for two residual stream sites and one MLP dictionary of 3,968 gated low-rank transforms at each of the 24 layers.
+statescope is a reader in one Python file and a set of dictionary weights for `Qwen/Qwen3.5-0.8B`, with one state dictionary for two residual stream sites and one MLP dictionary of 3,968 gated low-rank transforms at each of the 24 layers. A second set for `Qwen/Qwen3.5-4B` uses the same reader and is described in [Qwen3.5-4B set](#qwen35-4b-set).
 
 **You can reproduce**
 
@@ -52,7 +52,7 @@ pip install -e '.[model,dev]'
 
 Without flash-linear-attention, transformers silently uses a slow GatedDeltaNet reference implementation. A warning about a missing `causal_conv1d` means that a slower reference implementation is being used with unchanged values.
 
-The comparisons used Python 3.12.3, torch 2.11.0+cu128, transformers 5.20.2, flash-linear-attention 0.6.0 and safetensors 0.8.0.
+The comparisons used Python 3.12.3, torch 2.11.0+cu128, transformers 5.20.2, flash-linear-attention 0.6.0 and safetensors 0.8.0. With newer library versions, the demonstration's shares moved by up to about 0.01, as described in [What the tests showed for this set](#what-the-tests-showed-for-this-set).
 
 ## Reading the dictionaries
 
@@ -118,7 +118,7 @@ Before publication, the state configs were edited to set `kind` to `state_dictio
 
 ## Demonstration: line counting
 
-The task uses texts wrapped to a fixed width. At the last word of a line, the model must predict a line break, so it must know how many characters the line already holds. Each item pairs 256-token texts ending on the same words. The clean text's last line is full. In the corrupt text, a line break is not due because the last line break was moved or all lines were wrapped wider.
+The task uses texts wrapped to a fixed width. At the last word of a line, the model must predict a line break, so it must know how many characters the line already holds. Each item pairs 256-token texts ending on the same words. In every cell, the clean text's last line is full, at most 6 characters short of the width, so a line break is due.
 
 The margin is the last-token logsumexp of newline-token logits minus the logsumexp of logits for tokens starting with a space.
 
@@ -132,7 +132,7 @@ A patch replaces a tensor in the clean run with a value built from the corrupt r
 share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt)
 ```
 
-A share of 0 means that the patch changes nothing. A share of 1 means that the patch alone turns the clean run into the corrupt one. A cell is a task setting defined by the wrapping width and how the corrupt text is made. The three cells are `count:60`, `count:100` and `width:100`. In the count cells, the last line break moves. In the width cell, all lines are wrapped wider. Each cell contains 64 pairs in `demo/line_count_items.safetensors`, which stores token ids and position pairing. The texts are re-wrapped excerpts from FineWeb-Edu documents.
+A share of 0 means that the patch changes nothing. A share of 1 means that the patch alone turns the clean run into the corrupt one. A cell is a task setting defined by the wrapping width and how the corrupt text is made. The three cells are `count:60`, `count:100` and `width:100`. In the count cells, the corrupt text's last line starts at a later word than the clean text's, chosen so that the line holds between 35% and 65% of the width at the last word, and the preceding lines are wrapped backward from that word at the same width, moving their line breaks too. In the width cell, the corrupt text's last line starts at the same word as the clean text's, and the preceding lines are wrapped backward at 1.75 times the width. Each cell contains 64 pairs in `demo/line_count_items.safetensors`, which stores token ids and position pairing. The texts are re-wrapped excerpts from FineWeb-Edu documents.
 
 The original project found the following chain. The script uses its chosen transform, group and head and re-measures their effects. It does not search for them.
 
@@ -190,6 +190,19 @@ The demonstration has these caveats:
 - Single-item margins of dictionary swaps are reproducible only to about 0.1. Shares are reproducible only to about 0.003. A patched tensor is rounded to bf16. A 1e-6 relative difference between implementations flips some rounded elements.
 - The original project registered a pass rule for the mixer-to-MLP link before measuring it. The part inside the frame must keep at least 0.75 of the whole share. The rest must keep at most 0.25 of it and at most 0.05. Random frames must carry at most 0.01. The rule applies in both count cells. The original project's verdict was that the rule holds for the route through the six transforms and holds only in part for the route through 410 and 1749 alone, because it recorded a share of 0.051 for the rest in `count:100` through those two transforms.
 
+## Qwen3.5-4B set
+
+A second set for `Qwen/Qwen3.5-4B`, with 32 layers and width 2,560, is published at [mconcat/statescope-qwen3.5-4b](https://huggingface.co/mconcat/statescope-qwen3.5-4b) and occupies about 168 GiB. It uses the same forms, reader and folder layout, with `ALWAYS_ON.json` added and 9,920 MLP transforms per layer. It is a copy made on 2026-11-20 of what the original project trained with one seed, rather than a frozen configuration like the 0.8B set. There is no demonstration for it; `demo/line_count.py` is for 0.8B only.
+
+Read its model card's limits before use: reconstruction is worse than for 0.8B, with state FVU up to 0.42 against about 0.25 to 0.27 in the middle layers of 0.8B, and the original project measured spliced-in loss at one layer only. Many MLP transforms never fired on the original project's held-out shard, up to 60% at the last layer, while at most layers a few transforms fire on almost every token and carry a large share of the write energy; `ALWAYS_ON.json` lists them.
+
+This repository tested the set under rule R10, written before the runs, on 2026-11-20 with one RTX 5090 per run:
+
+- Readers were compared with the original project's code at all 32 layers on 4 splits of 4,096 held-out tokens. There were 36 differing state group sets and 5 differing MLP gate decisions, within the rule's limits. Raw state reconstructions elsewhere agreed within 1.7e-6 relative and MLP outputs within 2.0e-6 relative. The trainer's 64 held-out numbers were reproduced within 8.8e-6, against a limit of 1e-5.
+- Reconstruction error was measured on all 257,102 held-out tokens per layer. State raw FVU agreed with the original project's records within 1.7e-6 at all 32 layers and both sites, against a limit of 1e-4.
+- All 192 files matched the manifest, and MLP tensors were bit-identical to the training exports at all 32 layers. The configs were the originals with the stated edit. No machine path or removed name was found.
+- The usage lines were run once on the 4B model. Its `capture` was not compared with the original project's capture. The model in bf16 plus one layer's two dictionaries needed more than 14 GiB of GPU memory.
+
 ## Repository layout
 
 - `src/statescope/reader.py` contains the reader.
@@ -219,13 +232,19 @@ A missing required path fails its test. Nothing is skipped silently.
 ## What the tests showed for this set
 
 - All comparisons ran on one RTX 5090 machine with Qwen3.5-0.8B. Rules R8 and R9 were written and committed before the runs they judge.
+- The whole 0.8B suite was run again on 2026-11-20 after the earlier design moved off the main branch and the published configs were edited. All 167 tests passed: the 36 that need no private data and 131 that do. In comparisons with the original project's code, that code read the original files and this repository's reader read the published copy with the edited configs, as required by rule R11.4, written before the run.
 - The state reader was compared with a reader the original project wrote separately from its trainer. This covered 24 layers and 4 splits of 4,096 tokens at 2 sites. Of 786,432 tokens, 4 selected a different group set. Each had its 24th and 25th group norms within 7.3e-7. Raw reconstructions elsewhere agreed within 7.1e-7 relative. All 48 of the trainer's held-out FVU numbers in its own units were reproduced within 6.9e-7. These use the first 4,096 tokens of each split with position 0 included.
 - The MLP reader was compared with the unmodified public forward pass at 24 layers. There was 1 differing gate decision, at layer 3. Outputs on other tokens agreed within 1.9e-6 relative.
 - The sum of firing transforms' writes plus the output mean matched the forward pass within 1.5e-6 relative. The largest difference was 1.476e-6 at layer 22.
-- This repository measured reconstruction error on all held-out tokens, 257,122 per layer. The state dictionary's raw FVU agreed with the original project's table within 6.5e-8 at all 24 layers and both sites. The limit was 1e-4.
+- This repository measured reconstruction error on all held-out tokens, 257,122 per layer. The state dictionary's raw FVU agreed with the original project's table within 6.5e-8 at all 24 layers and both sites. The limit was 1e-4. Repeating the measurement with the reduced reader on the published folder gave identical values.
 - All 144 release files matched the manifest. MLP tensors for layers 0 to 22 were bit-identical to the training exports used by the reader tests. Layer 23 passed its own comparison with the public forward pass. No file header or config held a machine path.
-- Every demonstration share agreed within 0.0030 with the original harness's reference run and the original project's recorded numbers. There were 39 swaps x 3 cells x 3 halves = 351 comparisons. The original registration's tolerance was 0.005. The item file matched the original items exactly.
-- On 2026-11-19, the weights were downloaded from Hugging Face into an empty folder and the code was cloned from GitHub into an empty folder. `demo/verify_release.py` reported that all 144 files matched the manifest. `demo/line_count.py` on the downloaded weights wrote a result identical, byte for byte, to the tested run on the same machine, as checked with `devtools/compare_demo_runs.py`. This check used one machine with one RTX 5090. A second machine, a different GPU model and a fresh `pip install -e .` into a new environment were not checked.
+- Rule R11 was written and committed before the configs were rewritten. At all 24 layers, the parsed published `cfg.json` equalled the original with only the stated edit, and the published `config.yaml` equalled the original project's path-free copy byte for byte without the one removed line. The state dictionaries' tensor files were the original files. None of the removed names occurred in any config, any safetensors header, including tensor names and metadata, the manifest or the model card.
+- Every demonstration share agreed within 0.0030 with the original harness's reference run and the original project's recorded numbers. There were 39 swaps x 3 cells x 3 halves = 351 comparisons. The original registration's tolerance was 0.005. The item file matched the original items exactly. With the edited configs and the reduced reader, the demonstration wrote a result byte-identical to the run tested before the changes, as checked with `devtools/compare_demo_runs.py`, so these comparison numbers are unchanged.
+- The capture comparison was run again with the reduced reader. `resid_mid` and the MLP output were bit-identical to the original project's capture at layers 0 and 19.
+- The weights repository was uploaded again with the edited configs, and its earlier history was removed, leaving one commit. The 96 safetensors files on the server had the sha256 recorded in the manifest. Both repositories were made public on 2026-11-20.
+- On 2026-11-20, after the re-upload, the code was cloned from GitHub into an empty folder and installed into a new environment, and the weights were downloaded into an empty folder: 147 files in 16 min 46 s. Installing with `pip install -e '.[model,dev]'` gave torch 2.15.0+cu132, transformers 5.23.0, flash-linear-attention 0.6.0 and safetensors 0.8.0. The 36 tests that need no private data passed. The check also found that loading the model with `device_map` needs `accelerate`, which the `model` extra did not install. It was added to that extra; the tested environment already had it.
+- `demo/verify_release.py` reported that all 144 downloaded files matched the manifest. The downloaded `README.md` and `MANIFEST.json` were byte-identical to the repository's card and the staged manifest. With the cloned code and downloaded weights, `demo/line_count.py` in the tested versions, torch 2.11.0+cu128 and transformers 5.20.2, wrote a result byte-identical to the tested run.
+- In the new environment with torch 2.15.0+cu132 and transformers 5.23.0, the same demonstration ran in 1 min 49 s and was not byte-identical. The model's unpatched single-item margins differed by at most 0.146, and the 351 shares differed from the tested run by at most 0.011. The largest share difference was on a swap measuring the rest outside group 4885's frame: 0.009 in the tested run and 0.020 in the new environment. The documented numbers are exact for the tested versions; newer versions moved shares by up to about 0.01. This check still used only one machine and one GPU model, RTX 5090.
 
 ## What is not shown
 
@@ -234,7 +253,7 @@ A missing required path fails its test. Nothing is skipped silently.
 - Spliced-in loss is the increase in next-token cross-entropy when a dictionary reconstruction replaces the true activation in the forward pass, one layer and one dictionary at a time. The original project measured it in nats on text with clean cross-entropy 2.808. It used FineWeb-Edu rows outside the training mixture, taking the first 100 documents of at least 256 tokens and the first 256 tokens of each. Position 0 was not replaced. Loss was averaged over positions 1 to 254, or 25,400 positions. The dictionaries are the released ones. The original project separately measured the released layer 23 MLP dictionary on the same kind of web text, 100 documents of 256 tokens, and recorded +0.0502. In the original project's comparison on the same text, the earlier set had smaller increases at all 24 state layers and MLP layers 0 to 22. For the state dictionary at layer 9, it recorded +0.243 here against +0.161 for the earlier set. At layer 23, the released MLP dictionary had the smaller increase, +0.0502 against +0.0840 for the earlier set.
 - This repository did not repeat the original project's training-time MLP held-out measurements or the spliced-in loss measurements.
 - No full-length training run was repeated for either design.
-- Other models, including Qwen3.5-4B, are outside this set.
+- The demonstration and the 0.8B numbers do not carry over to the separate Qwen3.5-4B set.
 
 ## Earlier design
 

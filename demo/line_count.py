@@ -1,9 +1,12 @@
 """Line counting in Qwen3.5-0.8B, followed through the released dictionaries: L8 MLP -> L9 GDN head 10 -> L9 MLP.
 
 Task. A text is wrapped to a fixed width. At the last word of a line the model has to predict a line break, so it must know how many
-characters the line already holds. Each item is a pair of 256-token texts that end on the same words: the clean one is wrapped so
-that its last line is full; the corrupt one has the last line break moved (cells "count:W") or all lines wrapped wider (cell
-"width:W"), so that a line break is not due.
+characters the line already holds. Each item pairs 256-token texts ending on the same words; the clean text's last line is full,
+at most 6 characters short of the width, so a line break is due. In the corrupt text a line break is not due.
+In the count cells ("count:60", "count:100"), the corrupt text's last line starts at a later word chosen so that it holds between
+35% and 65% of the width at the last word; preceding lines are wrapped backward from that word at the same width, moving their
+line breaks too. In the width cell ("width:100"), the last line starts at the same word as in the clean text, and preceding lines
+are wrapped backward at 1.75 times the width.
 
 Score. m = logsumexp(logits of newline tokens) - logsumexp(logits of tokens that start with a space), at the last token.
 A patch takes one tensor of the clean run and replaces it with a value built from the corrupt run (moved onto the clean run's token
