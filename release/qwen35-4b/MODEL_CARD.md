@@ -18,7 +18,7 @@ This set provides two dictionaries per layer of Qwen3.5-4B. The state dictionary
 We used these units in the following experiments; their scripts are not published.
 
 - The model had to infer an unknown rule from a few input-output cases and complete a Python function; the test covered 24 rule families it had not been tuned on. We moved the residual stream inside a single state group's frame (the four directions of a group), at just the token before the function body. We used group 9167 of `resid_mid.27`, and the model then reasoned in comments before writing the rule. The rate of correct rules rose from 0.516 to 0.773. Forcing the first token of the body to the comment sign `#` gives a similar rate.
-- In an ABA rule the third item repeats the first; in an ABB rule it repeats the second. At layers 11 to 14, the sixteen highest-ranked state groups carried 0.67 to 0.78 of the effect of swapping the whole residual difference. Moving the residual stream inside the frame of group 12112 at `resid_post.13` changed which rule the model followed. It flipped from ABA to ABB in 0.45 of prompts.
+- In an ABA rule the third item repeats the first; in an ABB rule it repeats the second. The task comes from Yang et al. (2025), who describe a stage that turns such a rule into an abstract variable; we followed it in Qwen3.5-4B. At layers 11 to 14, the sixteen highest-ranked state groups carried 0.67 to 0.78 of the effect of swapping the whole residual difference. Moving the residual stream inside the frame of group 12112 at `resid_post.13` changed which rule the model followed. It flipped from ABA to ABB in 0.45 of prompts.
 - At layer 7, the MLP dictionary's reconstruction carries 0.89 of the MLP's contribution to a hand-traced JavaScript comparison.
 
 The prompts were built from templates, and we chose the units by contrasting two kinds of prompts.
@@ -328,7 +328,7 @@ Across 24 rule families it had not been tuned on, correct-rule rates rose from 0
 
 Forcing the first body token to `#` gives a similar rate: 0.65, against 0.72 with the unit, with the difference inside the interval. We selected the unit by contrasting prompts with and without an instruction to reason in comments first.
 
-**ABA/ABB rules.** ABA repeats the first item in third position; ABB repeats the second. We used comma-separated words and two examples in one plain-text format. At positions where the rule is abstracted, at layers 11 to 14, one state group's frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference; four groups carried 0.50 to 0.56 and sixteen 0.67 to 0.78. One direction found with supervision carried 0.78 to 0.89; a random 64-dimensional subspace carried 0.01 to 0.02.
+**ABA/ABB rules.** ABA repeats the first item in third position; ABB repeats the second. The task, and the picture of a stage that abstracts the rule into a variable, come from Yang et al. (2025). We used comma-separated words and two examples in one plain-text format. At positions where the rule is abstracted, at layers 11 to 14, one state group's frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference; four groups carried 0.50 to 0.56 and sixteen 0.67 to 0.78. One direction found with supervision carried 0.78 to 0.89; a random 64-dimensional subspace carried 0.01 to 0.02.
 
 Shifting inside group 12112's frame at `resid_post.13` by the mean difference between rules flipped ABA to ABB in 0.45 of prompts, or 0.98 at twice the shift. ABB to ABA reached 0.03, or 0.67 at twice the shift. We ranked units using rule labels; the result covers one text format, and the model did not solve the task inside its chat template.
 
@@ -362,3 +362,5 @@ In `cfg.json`, the format tag `kind = state_dictionary` and fields `form = bsf`,
 The code and dictionary weights are MIT licensed. The separately loaded base model, `Qwen/Qwen3.5-4B`, is Apache-2.0 licensed at revision `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`.
 
 `postnorm.safetensors` holds the base model's 2,560 RMSNorm coefficients and epsilon under Apache-2.0; all other tensors were trained on its activations. The MLP dictionary's form and trainer come from the MIT-licensed `crosslayer-transcoder` code (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange.
+
+The ABA / ABB task was studied by Yukang Yang, Declan Campbell, Kaixuan Huang, Mengdi Wang, Jonathan Cohen and Taylor Webb in "Emergent Symbolic Mechanisms Support Abstract Reasoning in Large Language Models", arXiv:2502.20332 (27 February 2025), https://arxiv.org/abs/2502.20332. Related later work: Melody Zixuan Li and Taylor Webb, "What drives the emergence of symbolic mechanisms in large language models?", arXiv:2611.13270 (9 November 2026), https://arxiv.org/abs/2611.13270.
