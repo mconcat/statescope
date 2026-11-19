@@ -45,7 +45,7 @@ A group is a set of 4 directions in the state dictionary. A frame is the orthono
 
 The input convention is per-token RMS normalization. The dictionary first divides the residual by its own size using `x * rsqrt(mean(x^2) + eps)`, with `eps = 1e-6`. It then standardises the result with a mean vector and one scale per site. To recover the raw residual, the reconstruction is multiplied by the token's own `sqrt(mean(x^2) + eps)`. `StateVocab.reconstruct(x, site)` performs both steps. Alternatively, `decode` accepts `rms=V.token_rms(x)`.
 
-Each layer's dictionary was trained on 30,003,200 tokens over 7,325 steps. Position 0 means the first position of every sequence. Training dropped position 0. Measurements with this dictionary should also drop position 0. The reader's `capture` function does so.
+Each layer's dictionary was trained on 30,003,200 tokens over 7,325 steps. Position 0 means the first position of every sequence. The original project dropped position 0 during training. The raw FVU columns below also drop position 0. The reader's `capture` function does so.
 
 The reader specifies the state representation and its input convention as follows:
 
@@ -73,7 +73,7 @@ The form comes from the public `crosslayer-transcoder` code, branch MOLT, commit
 
 The dictionary takes the layer's post-norm MLP input and produces a reconstruction of the raw MLP output. The reader computes that input from raw `resid_mid` using the layer's own RMSNorm coefficients. The formula is `u = x * rsqrt(mean(x^2) + eps) * w_eff`. The input is then standardised using per-dimension statistics retained by the trainer. The output is returned to raw MLP units with the stored output statistics.
 
-Each layer was trained for 58,600 steps of 500 tokens, or 29.3 million tokens. The learning rate was 4.0e-05. The sparsity penalty coefficient is 7.5e-05 for layers 0 to 22. Layer 23 used 2.5e-05 in a separate run. Unlike the state dictionary, MLP dictionary training included position 0 of every sequence.
+Each layer was trained for 58,600 steps of 500 tokens, or 29.3 million tokens. The learning rate was 4.0e-05. The sparsity penalty coefficient is 7.5e-05 for layers 0 to 22. Layer 23 used 2.5e-05 in a separate run. The original project included position 0 of every sequence during MLP dictionary training, unlike state dictionary training.
 
 The gate is a hard threshold. A transform whose pre-activation lies within float rounding of its threshold can be on in one computation and off in another. The reader gives the following forward-pass formulas:
 
@@ -87,48 +87,56 @@ y = y_std * sd_out + mu_out                                                     
 
 ## Numbers per layer
 
-FVU means fraction of variance unexplained. It is squared reconstruction error divided by the squared deviation from the per-dimension mean. The state columns give the trainer's held-out FVU in the dictionary's own units. These units are per-token-RMS-normalised and site-standardised. The evaluation uses the first 4,096 tokens of each of four held-out splits with position 0 included. The repository's reader reproduces all 48 numbers within 6.9e-7.
+FVU means fraction of variance unexplained. It is squared reconstruction error divided by the squared deviation from the per-dimension mean of each held-out split.
 
-The original project measured MLP FVU and transform activity on a held-out shard of the training capture, including position 0. That shard was deleted afterwards. Those held-out numbers cannot be recomputed from the published files. This repository did not re-measure them. “Transforms on per token” is the mean number of transforms whose gate is open at a token. “Transforms alive” counts transforms that fired on at least one token of that shard. The others never fired there. The recorded shard size at layer 9 was 267,271 tokens. At that layer, 2035 of 3968 transforms were alive.
+The “Layer” column identifies the layer. “State FVU, `resid_mid`” and “State FVU, `resid_post`” give reconstruction error in raw residual units at the two state sites. “MLP FVU” gives reconstruction error in raw MLP output units. This repository measured these three columns with its reader on all tokens of the original project's four held-out splits, with position 0 dropped. The splits contain 257,122 tokens per layer, of which 179 are at position 0. These columns show what the published files do under the published reader with position 0 dropped. The held-out activations are not published, so users cannot recompute these exact numbers. The state values agree with the original project's table, made with its separately written reader, within 6.5e-8 at every layer and both sites, both with position 0 dropped and with it included.
 
-With position 0 included, state FVU in raw residual units is higher than FVU in the dictionary's own units because position 0 has a very large norm. The original project measured raw FVU at layer 6, `resid_mid`, as 0.2524 with position 0 and 0.2184 without it.
+The original project recorded “MLP FVU recorded at training”, “MLP transforms on per token” and “MLP transforms alive” on a held-out shard of each layer's training capture, with position 0 included. “MLP FVU recorded at training” gives the FVU on that shard. “MLP transforms on per token” is the mean number of transforms whose gate is open at a token. “MLP transforms alive” counts transforms that fired on at least one token of that shard, out of the total. The others never fired there. The shards held 267,271 tokens at layers 9 and 23. At layer 9, 2035 of 3968 transforms were alive. The shards were deleted afterwards, including the shard for layer 23's separate run. These three columns cannot be recomputed from the published files. This repository did not repeat those measurements. The two MLP FVU columns differ because they are measured on different tokens.
 
-Each row below identifies a layer, and the columns give state FVU at both sites, MLP FVU, mean transforms on per token, transforms alive out of the total, and the penalty coefficient. The values come from the manifest with the measurement conventions described above.
+“MLP penalty” is the sparsity penalty coefficient from the manifest. It is 7.5e-05 for layers 0 to 22 and 2.5e-05 for layer 23, which used a separate run. The training facts stated for each layer were checked in all 24 state configs and all 24 MLP configs. The MLP configs differ only in layer index, logger name and penalty.
 
-| Layer | State FVU, `resid_mid` | State FVU, `resid_post` | MLP FVU | MLP transforms on per token | MLP transforms alive | MLP penalty |
-|---|---|---|---|---|---|---|
-| 0 | 0.0533 | 0.0568 | 0.0732 | 19.0 | 3955 of 3968 | 7.5e-05 |
-| 1 | 0.0917 | 0.1006 | 0.1447 | 11.2 | 3936 of 3968 | 7.5e-05 |
-| 2 | 0.1433 | 0.1302 | 0.1358 | 9.9 | 3901 of 3968 | 7.5e-05 |
-| 3 | 0.1587 | 0.1529 | 0.1599 | 10.3 | 3838 of 3968 | 7.5e-05 |
-| 4 | 0.1791 | 0.1597 | 0.1526 | 10.2 | 3793 of 3968 | 7.5e-05 |
-| 5 | 0.1888 | 0.1746 | 0.1736 | 9.9 | 3690 of 3968 | 7.5e-05 |
-| 6 | 0.2147 | 0.2084 | 0.1892 | 9.1 | 3167 of 3968 | 7.5e-05 |
-| 7 | 0.2393 | 0.2188 | 0.1851 | 9.2 | 2720 of 3968 | 7.5e-05 |
-| 8 | 0.2359 | 0.2221 | 0.2066 | 9.1 | 2396 of 3968 | 7.5e-05 |
-| 9 | 0.2452 | 0.2331 | 0.2153 | 8.9 | 2035 of 3968 | 7.5e-05 |
-| 10 | 0.2540 | 0.2367 | 0.1828 | 8.6 | 1862 of 3968 | 7.5e-05 |
-| 11 | 0.2713 | 0.2509 | 0.1763 | 8.3 | 1950 of 3968 | 7.5e-05 |
-| 12 | 0.2648 | 0.2453 | 0.1857 | 8.3 | 2290 of 3968 | 7.5e-05 |
-| 13 | 0.2594 | 0.2450 | 0.1768 | 8.5 | 2240 of 3968 | 7.5e-05 |
-| 14 | 0.2606 | 0.2325 | 0.1216 | 7.5 | 1935 of 3968 | 7.5e-05 |
-| 15 | 0.2586 | 0.2284 | 0.1200 | 8.2 | 2880 of 3968 | 7.5e-05 |
-| 16 | 0.2314 | 0.2190 | 0.1469 | 8.3 | 3350 of 3968 | 7.5e-05 |
-| 17 | 0.2185 | 0.2139 | 0.1555 | 8.4 | 3506 of 3968 | 7.5e-05 |
-| 18 | 0.2151 | 0.2059 | 0.1304 | 7.9 | 3462 of 3968 | 7.5e-05 |
-| 19 | 0.2294 | 0.2268 | 0.1370 | 8.2 | 3486 of 3968 | 7.5e-05 |
-| 20 | 0.2221 | 0.2252 | 0.1491 | 8.3 | 3565 of 3968 | 7.5e-05 |
-| 21 | 0.2307 | 0.2379 | 0.1461 | 8.2 | 3407 of 3968 | 7.5e-05 |
-| 22 | 0.2455 | 0.2551 | 0.1234 | 7.8 | 2960 of 3968 | 7.5e-05 |
-| 23 | 0.2666 | 0.2586 | 0.0206 | 16.1 | 3327 of 3968 | 2.5e-05 |
+This repository measured raw FVU with and without position 0. Position 0 matters for the state dictionary at some layers. At layer 6, `resid_mid`, raw FVU is 0.2524 with position 0 and 0.2184 without it. At layer 0, it is 0.0778 with position 0 and 0.0777 without it. For the MLP dictionary, the two differ by at most 0.014 at any layer.
+
+The original project also recorded the state trainer's own held-out FVU in `MANIFEST.json` as `heldout_fvu_own_units`. It uses the dictionary's own units, which are per-token-RMS-normalised and site-standardised. The evaluation uses the first 4,096 tokens of each split with position 0 included. The repository's reader reproduces all 48 numbers within 6.9e-7. At early layers, this number is lower than the number on all tokens because the first 4,096 tokens are an easier subset, not because of position 0. At layer 0, `resid_mid`, it is 0.0533 on the subset against 0.0693 on all tokens in the same units, or 0.0777 in raw units. At layer 9, it is 0.2452 on the subset against 0.2438 on all tokens in the same units.
+
+| Layer | State FVU, `resid_mid` | State FVU, `resid_post` | MLP FVU | MLP FVU recorded at training | MLP transforms on per token | MLP transforms alive | MLP penalty |
+|---|---|---|---|---|---|---|---|
+| 0 | 0.0777 | 0.0858 | 0.0879 | 0.0732 | 19.0 | 3955 of 3968 | 7.5e-05 |
+| 1 | 0.1153 | 0.1317 | 0.1627 | 0.1447 | 11.2 | 3936 of 3968 | 7.5e-05 |
+| 2 | 0.1617 | 0.1478 | 0.1481 | 0.1358 | 9.9 | 3901 of 3968 | 7.5e-05 |
+| 3 | 0.1710 | 0.1666 | 0.1734 | 0.1599 | 10.3 | 3838 of 3968 | 7.5e-05 |
+| 4 | 0.1899 | 0.1703 | 0.1633 | 0.1526 | 10.2 | 3793 of 3968 | 7.5e-05 |
+| 5 | 0.1956 | 0.1836 | 0.1812 | 0.1736 | 9.9 | 3690 of 3968 | 7.5e-05 |
+| 6 | 0.2184 | 0.2132 | 0.1961 | 0.1892 | 9.1 | 3167 of 3968 | 7.5e-05 |
+| 7 | 0.2403 | 0.2216 | 0.1908 | 0.1851 | 9.2 | 2720 of 3968 | 7.5e-05 |
+| 8 | 0.2390 | 0.2270 | 0.2134 | 0.2066 | 9.1 | 2396 of 3968 | 7.5e-05 |
+| 9 | 0.2491 | 0.2380 | 0.2243 | 0.2153 | 8.9 | 2035 of 3968 | 7.5e-05 |
+| 10 | 0.2576 | 0.2416 | 0.1975 | 0.1828 | 8.6 | 1862 of 3968 | 7.5e-05 |
+| 11 | 0.2713 | 0.2521 | 0.1863 | 0.1763 | 8.3 | 1950 of 3968 | 7.5e-05 |
+| 12 | 0.2634 | 0.2472 | 0.1973 | 0.1857 | 8.3 | 2290 of 3968 | 7.5e-05 |
+| 13 | 0.2590 | 0.2472 | 0.1883 | 0.1768 | 8.5 | 2240 of 3968 | 7.5e-05 |
+| 14 | 0.2625 | 0.2395 | 0.1406 | 0.1216 | 7.5 | 1935 of 3968 | 7.5e-05 |
+| 15 | 0.2623 | 0.2319 | 0.1289 | 0.1200 | 8.2 | 2880 of 3968 | 7.5e-05 |
+| 16 | 0.2293 | 0.2196 | 0.1557 | 0.1469 | 8.3 | 3350 of 3968 | 7.5e-05 |
+| 17 | 0.2167 | 0.2131 | 0.1650 | 0.1555 | 8.4 | 3506 of 3968 | 7.5e-05 |
+| 18 | 0.2132 | 0.2053 | 0.1394 | 0.1304 | 7.9 | 3462 of 3968 | 7.5e-05 |
+| 19 | 0.2259 | 0.2227 | 0.1455 | 0.1370 | 8.2 | 3486 of 3968 | 7.5e-05 |
+| 20 | 0.2166 | 0.2216 | 0.1618 | 0.1491 | 8.3 | 3565 of 3968 | 7.5e-05 |
+| 21 | 0.2249 | 0.2327 | 0.1602 | 0.1461 | 8.2 | 3407 of 3968 | 7.5e-05 |
+| 22 | 0.2402 | 0.2518 | 0.1385 | 0.1234 | 7.8 | 2960 of 3968 | 7.5e-05 |
+| 23 | 0.2614 | 0.2404 | 0.0246 | 0.0206 | 16.1 | 3327 of 3968 | 2.5e-05 |
 
 ## Spliced-in loss
 
-Spliced-in loss is the increase in next-token cross-entropy when a dictionary reconstruction replaces the true activation in the forward pass, one layer at a time. The original project measured these increases in nats on text with clean cross-entropy 2.808. This repository did not repeat the measurement.
+Spliced-in loss is the increase in next-token cross-entropy when a dictionary reconstruction replaces the true activation in the forward pass, one layer and one dictionary at a time. The original project measured these increases in nats on text with clean cross-entropy 2.808. This repository did not repeat the measurement.
 
-The recorded MLP result for layer 23 belongs to an earlier dictionary of that layer. It is omitted because it does not describe the released dictionary. On the same text, the earlier set had a smaller increase at every tested layer. That comparison covered all 24 state dictionary layers and MLP dictionary layers 0 to 22. For the state dictionary at layer 9, the recorded increase was +0.243 for this set against +0.161 for the earlier set.
+The original project used FineWeb-Edu rows that were not in the training mixture. It took the first 100 documents of at least 256 tokens and the first 256 tokens of each. Position 0 was not replaced. The loss was averaged over positions 1 to 254, or 25,400 positions.
 
-Each table row is a layer, and the columns distinguish replacement at `resid_post` by the state dictionary from replacement by the MLP dictionary. Values are increases in cross-entropy in nats, with the released layer 23 MLP result marked as not measured.
+The dictionaries are the released ones. The MLP result for layer 23 comes from a separate measurement by the original project on the same kind of web text, 100 documents of 256 tokens. It recorded +0.0502 for the released layer 23 dictionary.
+
+In the original project's comparison with the earlier set of dictionaries on the same text, the earlier set had a smaller increase for the state dictionary at all 24 layers and for the MLP dictionary at layers 0 to 22. For the state dictionary at layer 9, the recorded increase was +0.243 for this set against +0.161 for the earlier set. At layer 23, the released MLP dictionary had the smaller increase, +0.0502 against +0.0840 for the earlier set.
+
+Each table row is a layer, and the columns distinguish replacement at `resid_post` by the state dictionary from replacement by the MLP dictionary. Values are increases in cross-entropy in nats.
 
 | Layer | State dictionary spliced in at `resid_post` | MLP dictionary spliced in |
 |---|---|---|
@@ -155,7 +163,7 @@ Each table row is a layer, and the columns distinguish replacement at `resid_pos
 | 20 | +0.376 | +0.0251 |
 | 21 | +0.413 | +0.0275 |
 | 22 | +0.465 | +0.0261 |
-| 23 | +0.866 | not measured for the released dictionary |
+| 23 | +0.866 | +0.0502 |
 
 ## How to read the dictionaries
 
@@ -227,6 +235,10 @@ The part inside group 4885's frame moves the transforms about as much as the who
 
 The task uses one model, one dictionary seed and fixed-width texts. It is an easy task with dedicated MLP neurons, so it does not show that dictionary units are better than neurons. Group 4885 is dense rather than sparse. Single-item margins and shares have the rounding limits stated below. The original project registered a pass rule for this link before measurement. The part inside the frame must keep at least 0.75 of the whole share. The rest must keep at most 0.25 of it and at most 0.05. Random frames must carry at most 0.01. The rule applies in both count cells. The original project's verdict was that the rule holds for the route through the six transforms and holds only in part for the route through 410 and 1749 alone, because it recorded a share of 0.051 for the rest in `count:100` through those two transforms.
 
+## What the tests showed for this set
+
+- This repository measured reconstruction error on all held-out tokens, 257,122 per layer. The state dictionary's raw FVU agreed with the original project's table within 6.5e-8 at all 24 layers and both sites. The limit was 1e-4.
+
 ## Limitations
 
 - The demonstration covers one model, 0.8B, one dictionary seed and texts wrapped to a fixed width.
@@ -234,7 +246,7 @@ The task uses one model, one dictionary seed and fixed-width texts. It is an eas
 - State group 11586 is a sparse first-token-of-a-line group. Not every group is sparse. Some groups encountered by the original project on this task are dense 4-dimensional coordinates active on most tokens. They carry information in their coordinates. Group 4885 is one of these dense groups and is not a sparse feature.
 - Single-item margins of dictionary swaps are reproducible only to about 0.1. Shares are reproducible only to about 0.003. Patched tensors are rounded to bf16. A 1e-6 relative difference between implementations flips some rounded elements.
 - The trainers for this set are not in the repository. The earlier design's code is under `src/statescope/` in `vocab/`, `molt/`, `prep/`, `data/` and `train/`. The `statescope` command line and `release/qwen35-08b/` also belong to it. That design uses an untied state dictionary and an M1w MLP dictionary with 41,484 atoms. Its code reproduces how an earlier, unpublished set was trained. It did not train these weights. Porting the current trainers is planned.
-- The MLP dictionaries' held-out numbers cannot be recomputed because the original evaluation shard was deleted.
+- The MLP dictionaries' numbers recorded at training by the original project cannot be recomputed because the evaluation shards were deleted, including the shard for layer 23's separate run. The held-out activations behind this repository's raw state and MLP FVU columns are not published, so users cannot recompute those exact numbers either.
 - Spliced-in loss was measured by the original project and was not repeated in this repository.
 - No full-length training run was repeated for either design.
 - Other models, including Qwen3.5-4B, are outside this set.
