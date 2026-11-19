@@ -1,6 +1,6 @@
 # statescope
 
-statescope is a reader in one Python file and two sets of dictionary weights: for `Qwen/Qwen3.5-4B`, with 32 layers and 9,920 MLP transforms per layer, and for `Qwen/Qwen3.5-0.8B`, with 24 layers and 3,968 MLP transforms per layer. The 0.8B set also has a traced demonstration.
+statescope is a method and reader that uses per-layer state dictionaries of the residual stream and MLP dictionaries of gated low-rank transforms to read a language model's computation as a circuit of state groups and transforms. Sets published so far cover `Qwen/Qwen3.5-4B` (32 layers, 9,920 MLP transforms per layer) and `Qwen/Qwen3.5-0.8B` (24 layers, 3,968 MLP transforms per layer, with a traced demonstration), with sets for more models to follow.
 
 **You can reproduce**
 
@@ -10,14 +10,14 @@ statescope is a reader in one Python file and two sets of dictionary weights: fo
 
 ## What this is
 
-statescope contains a reader for per-layer dictionaries of `Qwen/Qwen3.5-4B` and `Qwen/Qwen3.5-0.8B`. In both sets, each layer has a state dictionary and an MLP dictionary that were trained separately.
+statescope provides a method and a reader in one Python file for reading a language model's computation through per-layer state and MLP dictionaries. Sets are published so far for `Qwen/Qwen3.5-4B`, with 32 layers and 9,920 MLP transforms per layer, and `Qwen/Qwen3.5-0.8B`, with 24 layers and 3,968 MLP transforms per layer and a traced demonstration. In both sets, each layer has a state dictionary and an MLP dictionary that were trained separately. Sets for more models, including Gemma, will follow.
 
 | Base model | Layers | Width | Groups per state dictionary / active groups per token | MLP transforms per layer | Size | Weights |
 |---|---|---|---|---|---|---|
 | `Qwen/Qwen3.5-4B` | 32 | 2,560 | 16,384 / 24 | 9,920 | About 168 GiB | [mconcat/statescope-qwen3.5-4b](https://huggingface.co/mconcat/statescope-qwen3.5-4b) |
 | `Qwen/Qwen3.5-0.8B` | 24 | 1,024 | 16,384 / 24 | 3,968 | About 27.4 GiB | [mconcat/statescope-qwen3.5-0.8b](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b) |
 
-A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output.
+In the Qwen3.5 models, a mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output.
 
 By design, the mixers are read directly at the level of the model's own heads and channels. We also trained a stateful transcoder, a dictionary with a state carried across tokens, on 18 GatedDeltaNet layers of the 0.8B model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer. Attention is read at the level of heads.
 
@@ -91,7 +91,7 @@ The 4B set contains 192 weight and config files. Its state dictionaries occupy a
 python demo/verify_release.py --release <folder>
 ```
 
-The reader is the single file `src/statescope/reader.py`. It can be copied next to the weights. `capture` returns `resid_mid`, `mlp_out` and `resid_post` for the requested layer with position 0 dropped.
+The reader is the single file `src/statescope/reader.py`. It can be copied next to the weights. For Qwen3.5, `capture` returns `resid_mid`, `mlp_out` and `resid_post` for the requested layer with position 0 dropped.
 
 ```python
 import torch
@@ -131,7 +131,7 @@ The 4B set contains a state dictionary and an MLP dictionary for each of the 32 
 
 ## Demonstration: line counting
 
-The demonstration uses the 0.8B set on texts wrapped to a fixed width. At the last word of a line, the model must predict a line break, so it must know how many characters the line already holds. Each item pairs 256-token texts ending on the same words. In every cell, the clean text's last line is full, at most 6 characters short of the width, so a line break is due.
+The demonstration uses the 0.8B set on texts wrapped to a fixed width. The task comes from Gurnee et al. (2026), "When Models Manipulate Manifolds: The Geometry of a Counting Task" (see [Related work](#related-work)). At the last word of a line, the model must predict a line break, so it must know how many characters the line already holds. Each item pairs 256-token texts ending on the same words. In every cell, the clean text's last line is full, at most 6 characters short of the width, so a line break is due.
 
 The margin is the last-token logsumexp of newline-token logits minus the logsumexp of logits for tokens starting with a space.
 
@@ -257,6 +257,14 @@ The pass/fail rules were written down before the comparisons were run and are in
 - A fresh clone, a new environment and a fresh download reproduce the demonstration byte for byte with torch 2.11.0+cu128 and transformers 5.20.2.
 - With newer library versions, torch 2.15.0+cu132 and transformers 5.23.0, shares differ by at most 0.011.
 - The 4B usage lines were run once on the 4B model.
+
+## Related work
+
+- The form of the MLP dictionary, a sparse mixture of linear transforms (MOLT), follows this work. Jack Lindsey, Brian Chen, Adam Pearce, Sasha Hydrie, Thomas Conerly; edited by Jeff Wu. ["Sparse mixtures of linear transforms."](https://transformer-circuits.pub/2025/bulk-update/index.html) Transformer Circuits Thread, 2025.
+- This is closely related contemporaneous work on decomposing MLP layers. James Oldfield, Shawn Im, Sharon Li, Mihalis A. Nicolaou, Ioannis Patras, Grigorios G Chrysos. ["Towards Interpretability Without Sacrifice: Faithful Dense Layer Decomposition with Mixture of Decoders."](https://arxiv.org/abs/2505.21364) arXiv:2505.21364, 2025 (NeurIPS 2025).
+- The demonstration's line-count task comes from this paper on Claude 3.5 Haiku; here the task is followed in Qwen3.5-0.8B, where one head of a GatedDeltaNet layer carries the count. Wes Gurnee, Emmanuel Ameisen, Isaac Kauvar, Julius Tarng, Adam Pearce, Chris Olah, Joshua Batson. ["When Models Manipulate Manifolds: The Geometry of a Counting Task."](https://arxiv.org/abs/2601.04480) arXiv:2601.04480, 2026.
+- The ABA / ABB rule task used with the 4B set comes from this work. Yukang Yang, Declan Campbell, Kaixuan Huang, Mengdi Wang, Jonathan Cohen, Taylor Webb. ["Emergent Symbolic Mechanisms Support Abstract Reasoning in Large Language Models."](https://arxiv.org/abs/2502.20332) arXiv:2502.20332, 2025 (ICML 2025).
+- This is related later work on the ABA / ABB rule task. Melody Zixuan Li, Taylor Webb. ["What drives the emergence of symbolic mechanisms in large language models?"](https://arxiv.org/abs/2611.13270) arXiv:2611.13270, 2026.
 
 ## License and credits
 

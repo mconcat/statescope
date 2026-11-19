@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "statescope"
 version = "0.1.0"
-description = "Per-layer dictionaries for Qwen3.5: a state dictionary of the residual stream and an operation dictionary of the MLP"
+description = "A reader for per-layer state and MLP dictionaries of language models"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 dependencies = ["torch>=2.11", "safetensors>=0.8", "pyyaml"]

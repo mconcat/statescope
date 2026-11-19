@@ -1,5 +1,6 @@
-"""Reader for the per-layer dictionaries of a Qwen3.5 model. Self-contained: needs torch and safetensors (transformers only for `capture`
-and `write_post_norm`, PyYAML only for `PublicMolt`).
+"""Reader for the per-layer dictionaries of a language model. Self-contained: needs torch and safetensors (transformers only for `capture`
+and `write_post_norm`, PyYAML only for `PublicMolt`). Sets are published so far for Qwen3.5-4B and Qwen3.5-0.8B; `decoder_layers`,
+`capture` and `write_post_norm` follow the layer layout of Qwen3.5.
 
 This file imports nothing else from the package, so it can be copied next to the weights and used on its own.
 

@@ -1,4 +1,5 @@
-"""statescope: per-layer dictionaries of Qwen3.5 (a state dictionary of the residual stream, an MLP dictionary of transforms).
+"""statescope: per-layer dictionaries of a language model (a state dictionary of the residual stream, an MLP dictionary of transforms).
+Sets are published so far for Qwen3.5-4B and Qwen3.5-0.8B.
 
 This file imports nothing; import the module you need.
 
