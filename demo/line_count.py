@@ -24,10 +24,13 @@ The chain (found by the original project; this script takes its choice of transf
     python demo/line_count.py --release <folder with state/ and mlp/> [--device cuda:0] [--out result_folder]
 
 Needs transformers with Qwen3.5 support; on a GPU also flash-linear-attention (without it the GDN layers run a slow reference kernel).
+
+The file has three parts after the constants: the model with hooks, the L9 mixer (a Gated DeltaNet layer) by hand, the measurements.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 from dataclasses import dataclass
@@ -37,10 +40,11 @@ import torch
 import torch.nn.functional as F
 from safetensors.torch import load_file, save_file
 
-from statescope.config import MODELS, ModelSpec
+from statescope.config import MODELS
 from statescope.lm import LanguageModel, load_language_model
 from statescope.reader import PublicMolt, StateVocab
 
+# ---------------------------------------------------------------------------------------------- constants
 CELLS = ("count:60", "count:100", "width:100")
 COUNT_CELLS = ("count:60", "count:100")
 BATCH = 32
@@ -49,7 +53,9 @@ L8_TRANSFORM, L8_GROUP = 189, 11586
 L9_TRANSFORMS = (410, 1749)
 L9_GROUP = 4885                    # state group of resid_mid.9 whose frame carries the count from the mixer to the L9 transforms
 LINK_ROUTES = {"F2": (410, 1749, 6, 3720, 1394, 2275), "T2": L9_TRANSFORMS}   # the original's six L9 transforms; the two named above
+FRAME_DIM = 4                      # dimensions of a state group's frame; the random frames of the comparison get the same
 N_RANDOM_FRAMES = 5
+CHAR_BIN = 10                      # width, in characters, of the bins of by_chars_in_line
 ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_count_items.safetensors")
 
 Patch = Callable[[torch.Tensor], torch.Tensor]
@@ -135,9 +141,16 @@ class Engine:
 
 
 # ---------------------------------------------------------------------------------------------- the L9 mixer (a Gated DeltaNet layer) by hand
+def _qwen_module():
+    """transformers' Qwen3.5 module: its causal convolution, its delta-rule kernel and its l2norm are used below.
+    Imported on first use, so that --help works without transformers."""
+    from transformers.models.qwen3_5 import modeling_qwen3_5
+    return modeling_qwen3_5
+
+
 def gdn_inputs(mixer, x: torch.Tensor) -> dict[str, torch.Tensor]:
     """The mixer's own projections of its input x (B, T, d): per head q, k (B, T, H, dk), v, z (B, T, H, dv), g, beta (B, T, H)."""
-    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    MQ = _qwen_module()
     B, T, _ = x.shape
     mixed = mixer.in_proj_qkv(x).transpose(1, 2)
     z = mixer.in_proj_z(x).reshape(B, T, -1, mixer.head_v_dim)
@@ -156,7 +169,7 @@ def gdn_inputs(mixer, x: torch.Tensor) -> dict[str, torch.Tensor]:
 
 def gdn_output(mixer, p: dict[str, torch.Tensor]) -> torch.Tensor:
     """The mixer's output from its projections: the model's own delta-rule kernel, gated norm and output projection."""
-    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    MQ = _qwen_module()
     B, T = p["q"].shape[:2]
     core, _ = MQ.torch_chunk_gated_delta_rule(p["q"], p["k"], p["v"], g=p["g"], beta=p["beta"], initial_state=None,
                                               output_final_state=False, use_qk_l2norm_in_kernel=True)
@@ -167,7 +180,7 @@ def gdn_output(mixer, p: dict[str, torch.Tensor]) -> torch.Tensor:
 def head_state_read(p: dict[str, torch.Tensor], head: int) -> tuple[torch.Tensor, torch.Tensor]:
     """One head's recurrence in fp32, token by token: the state S (dk, dv) decays, the delta rule overwrites what key k_t holds
     with v_t, and the query q_t reads it. Returns the read o (B, T, dv) before the head's norm, and the head's norm gate z."""
-    from transformers.models.qwen3_5 import modeling_qwen3_5 as MQ
+    MQ = _qwen_module()
     q = MQ.l2norm(p["q"][:, :, head].float(), dim=-1, eps=1e-6)
     q = q / (q.shape[-1] ** 0.5)
     k = MQ.l2norm(p["k"][:, :, head].float(), dim=-1, eps=1e-6)
@@ -250,7 +263,7 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
     head_columns = mixer9.out_proj.weight[:, HEAD * mixer9.head_v_dim:(HEAD + 1) * mixer9.head_v_dim].float()
     frame, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
     generator = torch.Generator().manual_seed(0)
-    random_frames = [torch.linalg.qr(torch.randn(vocab8.d, 4, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
+    random_frames = [torch.linalg.qr(torch.randn(vocab8.d, FRAME_DIM, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
     margins: dict[str, list[torch.Tensor]] = {}
     energy = {"all": 0.0, "group": 0.0, **{f"random{j}": 0.0 for j in range(N_RANDOM_FRAMES)}}
     gates: dict[str, list[torch.Tensor]] = {"l8": [], "l9": []}
@@ -381,8 +394,8 @@ def summarize(tensors: dict[str, torch.Tensor], info: dict) -> dict:
                        *((f"L9 transform {t}", tensors["gate/l9"][:n_count, :, j]) for j, t in enumerate(L9_TRANSFORMS))):
         on = gate > 0
         fire[name] = {k: float(on[sel].float().mean()) for k, sel in where.items()}
-        fire[name]["by_chars_in_line"] = {f"{lo}-{lo + 9}": float(on[where["other"] & (lab["chars"] >= lo) & (lab["chars"] < lo + 10)].float().mean())
-                                          for lo in range(0, 100, 10)}
+        fire[name]["by_chars_in_line"] = {f"{lo}-{lo + CHAR_BIN - 1}": float(on[where["other"] & (lab["chars"] >= lo) & (lab["chars"] < lo + CHAR_BIN)].float().mean())
+                                          for lo in range(0, 100, CHAR_BIN)}
     return {"shares": shares, "firing_rate": fire, **info}
 
 
@@ -414,8 +427,8 @@ def print_summary(result: dict) -> None:
         row += f"{six:>9.3f} / {two:.3f}        "
     print(f"{'L9 mixer swap, inside a random frame (max)':42s}" + row)
     fraction = result["energy_fraction_t189_swap"]
-    print(f"\nenergy of transform {L8_TRANSFORM}'s swapped write inside the 4-dimensional frame of group {L8_GROUP}: {fraction['group']:.3f}"
-          f"   (random 4-dimensional frames: at most {max(v for k, v in fraction.items() if k.startswith('random')):.3f})")
+    print(f"\nenergy of transform {L8_TRANSFORM}'s swapped write inside the {FRAME_DIM}-dimensional frame of group {L8_GROUP}: {fraction['group']:.3f}"
+          f"   (random {FRAME_DIM}-dimensional frames: at most {max(v for k, v in fraction.items() if k.startswith('random')):.3f})")
     print("\nfiring rate on the clean texts of the count cells")
     for name, rates in result["firing_rate"].items():
         print(f"  {name:18s} line-first tokens {rates['line_first']:.3f}   line breaks {rates['newline']:.3f}   other tokens {rates['other']:.3f}")
@@ -430,8 +443,8 @@ def main() -> None:
     ap.add_argument("--items", default=ITEMS, help="the 3 x 64 item pairs (token ids and pairing)")
     ap.add_argument("--out", default=None, help="folder for result.json (shares, firing rates) and result.safetensors (per-item margins, gates)")
     args = ap.parse_args()
-    spec = MODELS["qwen3.5-0.8b"]
-    engine = Engine(load_language_model(ModelSpec(spec.name, args.model, spec.d_model, spec.n_layers), device=args.device))
+    spec = dataclasses.replace(MODELS["qwen3.5-0.8b"], hf_id=args.model)
+    engine = Engine(load_language_model(spec, device=args.device))
     molt8 = PublicMolt(os.path.join(args.release, "mlp", "L8"), device=args.device)
     molt9 = PublicMolt(os.path.join(args.release, "mlp", "L9"), device=args.device)
     vocab8 = StateVocab(os.path.join(args.release, "state", "L8"), device=args.device)
