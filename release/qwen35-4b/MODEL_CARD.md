@@ -5,7 +5,7 @@ base_model: Qwen/Qwen3.5-4B
 
 # Qwen3.5-4B per-layer dictionaries
 
-This set provides two dictionaries per layer of Qwen3.5-4B. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
+This is the statescope set for Qwen3.5-4B: two dictionaries per layer and a Python reader. statescope reads a language model's computation through per-layer state dictionaries and MLP transform dictionaries; sets for other models are planned. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
 
 ### What you can do with it
 
@@ -197,7 +197,7 @@ The default of 24 active groups came from comparing 24, 40 and 60 at layers 7, 1
 
 ### MLP dictionary
 
-One MLP-dictionary unit is a transform that reads one token's MLP input and writes a contribution to the reconstructed MLP output; transform 357 at layer 7 ranked first in our hand-traced JavaScript comparison. Its rank of 64 means it maps the normalized and standardized input to 64 intermediate numbers, then maps those numbers to an output vector. It also computes a gate score from the input and "fires" only when that score exceeds both its learned threshold and zero. When it fires, the score scales the vector it writes; when it is off, it writes zero. We sum the transforms' writes and restore output units to reconstruct the MLP output. We recorded a mean of 31.6 firing transforms per token at layer 7 on the held-out training mix.
+One MLP-dictionary unit is a transform that reads one token's MLP input and writes a contribution to the reconstructed MLP output; transform 357 at layer 7 ranked first in our hand-traced JavaScript comparison. Its rank of 64 means it maps the normalized and standardized input to 64 intermediate numbers, then maps those numbers to an output vector. It also computes a gate score from the input and "fires" only when that score exceeds both its learned threshold and zero. When it fires, the score scales the vector it writes; when it is off, it writes zero. We sum the transforms' writes and restore output units to reconstruct the MLP output. We recorded a mean of 31.6 firing transforms per token at layer 7 on the held-out training mix. The form follows "Sparse mixtures of linear transforms" (Lindsey et al., 2025); the Mixture of Decoders of Oldfield et al. (2025) is closely related work from the same period.
 
 The reader maps raw `resid_mid` through the layer's RMSNorm, using `w_eff = 1 + weight` of `post_attention_layernorm` and `eps = 1e-06`. In the formula, `z` is standardized input, `h_t` is gate pre-activation, `theta_t` its learned threshold, and `V_t`/`U_t` the read/write matrices.
 
@@ -362,5 +362,7 @@ In `cfg.json`, the format tag `kind = state_dictionary` and fields `form = bsf`,
 The code and dictionary weights are MIT licensed. The separately loaded base model, `Qwen/Qwen3.5-4B`, is Apache-2.0 licensed at revision `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`.
 
 `postnorm.safetensors` holds the base model's 2,560 RMSNorm coefficients and epsilon under Apache-2.0; all other tensors were trained on its activations. The MLP dictionary's form and trainer come from the MIT-licensed `crosslayer-transcoder` code (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange.
+
+The MLP dictionary's form was proposed by Jack Lindsey, Brian Chen, Adam Pearce, Sasha Hydrie and Thomas Conerly (edited by Jeff Wu) in "Sparse mixtures of linear transforms", Transformer Circuits Thread, 2025, https://transformer-circuits.pub/2025/bulk-update/index.html. Closely related work: James Oldfield, Shawn Im, Sharon Li, Mihalis A. Nicolaou, Ioannis Patras and Grigorios G Chrysos, "Towards Interpretability Without Sacrifice: Faithful Dense Layer Decomposition with Mixture of Decoders", arXiv:2505.21364 (27 May 2025), https://arxiv.org/abs/2505.21364.
 
 The ABA / ABB task was studied by Yukang Yang, Declan Campbell, Kaixuan Huang, Mengdi Wang, Jonathan Cohen and Taylor Webb in "Emergent Symbolic Mechanisms Support Abstract Reasoning in Large Language Models", arXiv:2502.20332 (27 February 2025), https://arxiv.org/abs/2502.20332. Related later work: Melody Zixuan Li and Taylor Webb, "What drives the emergence of symbolic mechanisms in large language models?", arXiv:2611.13270 (9 November 2026), https://arxiv.org/abs/2611.13270.

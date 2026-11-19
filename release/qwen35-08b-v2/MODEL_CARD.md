@@ -5,7 +5,7 @@ base_model: Qwen/Qwen3.5-0.8B
 
 # Qwen3.5-0.8B per-layer dictionaries
 
-These files provide two dictionaries for every layer of Qwen3.5-0.8B and a Python reader. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
+This is the statescope set for Qwen3.5-0.8B: two dictionaries for every layer and a Python reader. statescope reads a language model's computation through per-layer state dictionaries and MLP transform dictionaries; sets for other models are planned. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
 
 ### What you can do with it
 
@@ -190,7 +190,7 @@ x_hat = (mu_site + scale_site * (sum_active c_g Q_g + b_dec)) * rms
 
 ### MLP dictionary
 
-One MLP unit is a transform, such as layer-8 transform 189, which fires on the first token of a line. For one token, it reads the prepared MLP input and computes a score; the transform fires if this score is positive and above its learned threshold, in which case the score becomes its gate value. Its read matrix maps the input to a smaller set of numbers, and its write matrix maps them back to an output vector, multiplied by the gate; when the gate is zero, the transform writes nothing. Transform 189 writes mostly inside state group 11586's frame at `resid_post.8`, carrying the line-start signal described above. We add the active transforms' writes to reconstruct the token's MLP output. The number that fire varies by token; at layer 8, we recorded a mean of 9.1 active transforms per token on the held-out training shard, including position 0.
+One MLP unit is a transform, such as layer-8 transform 189, which fires on the first token of a line. For one token, it reads the prepared MLP input and computes a score; the transform fires if this score is positive and above its learned threshold, in which case the score becomes its gate value. Its read matrix maps the input to a smaller set of numbers, and its write matrix maps them back to an output vector, multiplied by the gate; when the gate is zero, the transform writes nothing. Transform 189 writes mostly inside state group 11586's frame at `resid_post.8`, carrying the line-start signal described above. We add the active transforms' writes to reconstruct the token's MLP output. The number that fire varies by token; at layer 8, we recorded a mean of 9.1 active transforms per token on the held-out training shard, including position 0. The form follows "Sparse mixtures of linear transforms" (Lindsey et al., 2025); the Mixture of Decoders of Oldfield et al. (2025) is closely related work from the same period.
 
 The reader applies RMSNorm to raw `resid_mid`, standardizes each dimension, and restores raw output units. This uses the model's learned RMSNorm weight, `w_eff = 1 + weight` of `post_attention_layernorm`, with `eps = 1e-06`.
 
@@ -386,6 +386,8 @@ In `cfg.json`, `kind: state_dictionary` is the format tag; `form: bsf`, `gate: t
 
 The code and dictionary weights use MIT. The separately loaded `Qwen/Qwen3.5-0.8B` base model (revision `2fc06364715b967f1860aea9cf38778875588b17`) uses Apache 2.0; `capture` takes a model loaded by the caller. Its copied norm values in `postnorm.safetensors` also come from the Apache-2.0-licensed model: `w_eff` has 1,024 values equal to 1 plus the layer's norm weight, with `eps = 1e-06`. Other tensors were trained on residual activations or MLP inputs and outputs.
 
-The MLP form and trainer come from MIT-licensed `crosslayer-transcoder` (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange. The demonstration texts come from `HuggingFaceFW/fineweb-edu` under the Open Data Commons Attribution License (ODC-By 1.0).
+The MLP form and trainer come from MIT-licensed `crosslayer-transcoder` (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange.
+
+The MLP dictionary's form was proposed by Jack Lindsey, Brian Chen, Adam Pearce, Sasha Hydrie and Thomas Conerly (edited by Jeff Wu) in "Sparse mixtures of linear transforms", Transformer Circuits Thread, 2025, https://transformer-circuits.pub/2025/bulk-update/index.html. Closely related work: James Oldfield, Shawn Im, Sharon Li, Mihalis A. Nicolaou, Ioannis Patras and Grigorios G Chrysos, "Towards Interpretability Without Sacrifice: Faithful Dense Layer Decomposition with Mixture of Decoders", arXiv:2505.21364 (27 May 2025), https://arxiv.org/abs/2505.21364. The demonstration texts come from `HuggingFaceFW/fineweb-edu` under the Open Data Commons Attribution License (ODC-By 1.0).
 
 The line-break task was studied by Wes Gurnee, Emmanuel Ameisen, Isaac Kauvar, Julius Tarng, Adam Pearce, Chris Olah and Joshua Batson, in "When Models Manipulate Manifolds: The Geometry of a Counting Task", arXiv:2601.04480 (8 January 2026), https://arxiv.org/abs/2601.04480.
