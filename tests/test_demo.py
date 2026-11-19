@@ -127,10 +127,11 @@ def _recorded(settings: Settings) -> dict[str, dict[str, dict[str, float]]]:
         share = link["cells"][cell]["share"]
         for base in ("mix", "h10o"):
             for mine, theirs in LINK_NAMES.items():
-                for route in ("down", "T2"):
+                for route in ("down", "F2", "T2"):
                     rows[f"link/{base}/{mine}/{route}"] = share[f"{base}/{theirs}"][route]
         for j in range(5):
-            rows[f"link/mix/rand{j}/T2"] = share[f"mix/proj_rand{j}"]["T2"]
+            for route in ("F2", "T2"):
+                rows[f"link/mix/rand{j}/{route}"] = share[f"mix/proj_rand{j}"][route]
         out[cell] = {arm: {half: row[half][0] for half in HALVES} for arm, row in rows.items()}
     return out
 

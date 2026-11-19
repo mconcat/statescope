@@ -350,6 +350,8 @@ and through the writes of transforms 410 and 1749 only, and the whole mixer swap
 repeats the original's definitions with snapshot 3's own helpers; the record is the original's result file, read from the original
 results folder, not from a snapshot. First run: all 153 share comparisons within 0.0030 of the reference and within 0.0022 of the
 record.
+After the original project reported its verdict (the registered rule holds for the route through its six L9 transforms and holds
+only in part for the route through 410 and 1749 alone), the six-transform route was added for the same arms: 28 link arms in all.
 
 Not covered by R9: everything in the note that passes through the GDN dictionary's registers; the selection of the transforms and
 groups (the demonstration takes the original's choices as given and says so); other cells, seeds or models.

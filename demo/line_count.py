@@ -16,9 +16,10 @@ The chain (found by the original project; this script takes its choice of transf
   2. The model's own L9 mixer reads that: swapping only transform 189's write, or only group 11586, in what the L9 mixer reads moves
      the answer about as much as swapping the whole L8 MLP output. Inside the L9 mixer, GDN head 10 carries the count.
   3. L9 MLP dictionary: transform 410 (on while the line is short) and transform 1749 (on once the line is long) turn the count into
-     the line-break decision. What they read of the mixer's write lies mostly inside the 4-dimensional frame of state group 4885
-     of resid_mid.9: that part alone moves the two transforms about as much as the whole write, the rest moves them little
-     (the rest still reaches the answer by other routes).
+     the line-break decision. What the L9 transforms read of the mixer's write lies mostly inside the 4-dimensional frame of
+     state group 4885 of resid_mid.9: that part alone moves them about as much as the whole write, the rest moves them little
+     (the rest still reaches the answer by other routes). This is measured for the original's six L9 transforms together
+     (410, 1749, 6, 3720, 1394, 2275) and for 410 and 1749 alone.
 
     python demo/line_count.py --release <folder with state/ and mlp/> [--device cuda:0] [--out result_folder]
 
@@ -47,6 +48,7 @@ HEAD = 10                          # GDN head of layer 9 that carries the count
 L8_TRANSFORM, L8_GROUP = 189, 11586
 L9_TRANSFORMS = (410, 1749)
 L9_GROUP = 4885                    # state group of resid_mid.9 whose frame carries the count from the mixer to the L9 transforms
+LINK_ROUTES = {"F2": (410, 1749, 6, 3720, 1394, 2275), "T2": L9_TRANSFORMS}   # the original's six L9 transforms; the two named above
 N_RANDOM_FRAMES = 5
 ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_count_items.safetensors")
 
@@ -322,15 +324,21 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
                 with_mlp9(c.mlp9 + swap(write_x, write_c), f"l9/t{t}")
 
             # ---- the link: the mixer's swap (whole, or head 10's), all of it / only its part inside group 4885's frame / the rest.
-            #      `down` = added at the mixer output; `T2` = only the change it causes in the writes of transforms 410 and 1749
-            def writes9(mid9: torch.Tensor) -> torch.Tensor:
-                return sum(molt9.transform_write(flat(mid9), t) for t in L9_TRANSFORMS).view(B, T, d)
+            #      `down` = added at the mixer output; `F2` / `T2` = only the change it causes in the writes of a set of L9 transforms
+            def writes9(mid9: torch.Tensor) -> dict[str, torch.Tensor]:
+                one = {t: molt9.transform_write(flat(mid9), t).view(B, T, d) for t in LINK_ROUTES["F2"]}
+                return {route: sum(one[t] for t in transforms) for route, transforms in LINK_ROUTES.items()}
 
             writes9_clean = writes9(c.mid9)
 
+            def through_transforms(change: torch.Tensor, arm: str) -> None:
+                changed = writes9(c.mid9 + change)
+                for route in LINK_ROUTES:
+                    with_mlp9(c.mlp9 + changed[route] - writes9_clean[route], f"link/{arm}/{route}")
+
             def link(change: torch.Tensor, arm: str) -> None:
                 with_mix9(c.mix9 + change, f"link/{arm}/down")
-                with_mlp9(c.mlp9 + writes9(c.mid9 + change) - writes9_clean, f"link/{arm}/T2")
+                through_transforms(change, arm)
 
             d_mix = swap(x.mix9, c.mix9)
             for base, change in (("mix", d_mix), ("h10o", d_head)):
@@ -339,7 +347,7 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
                 link(inside, f"{base}/g4885")
                 link(change - inside, f"{base}/minus_g4885")
             for j, fr in enumerate(random_frames):
-                with_mlp9(c.mlp9 + writes9(c.mid9 + in_frame(fr, d_mix)) - writes9_clean, f"link/mix/rand{j}/T2")
+                through_transforms(in_frame(fr, d_mix), f"mix/rand{j}")
 
             gates["l8"].append(gate8_c[:, [L8_TRANSFORM]].view(B, T, -1).cpu())
             gates["l9"].append(gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1).cpu())
@@ -390,15 +398,21 @@ def print_summary(result: dict) -> None:
     for name, arm in rows:
         cells = [result["shares"][cell][arm] for cell in CELLS]
         print(f"{name:46s}" + "".join(f"{v['even'][0]:>10.3f} ({v['all'][0]:.3f})" for v in cells))
-    print(f"\nthe link from the L9 mixer to L9 transforms {L9_TRANSFORMS[0]} and {L9_TRANSFORMS[1]}: share carried through those two transforms' writes"
-          f" (even-numbered items; in brackets: the same change with everything downstream)")
-    print(f"{'':46s}" + "".join(f"{cell:>18s}" for cell in CELLS))
+    print("\nthe link from the L9 mixer to the L9 transforms: share carried through the writes of six L9 transforms / of transforms "
+          f"{L9_TRANSFORMS[0]} and {L9_TRANSFORMS[1]} only (even-numbered items; in brackets: the same change with everything downstream)")
+    print(f"{'':42s}" + "".join(f"{cell:>24s}" for cell in CELLS))
     for base, label in (("mix", "L9 mixer swap"), ("h10o", f"head {HEAD} swap")):
         for part, what in (("full", "all of it"), ("g4885", f"inside group {L9_GROUP}'s frame"), ("minus_g4885", "the rest")):
-            cells = [(result["shares"][cell][f"link/{base}/{part}/T2"]["even"][0], result["shares"][cell][f"link/{base}/{part}/down"]["even"][0]) for cell in CELLS]
-            print(f"{label + ', ' + what:46s}" + "".join(f"{t2:>10.3f} ({down:.3f})" for t2, down in cells))
-    largest = [max(abs(result["shares"][cell][f"link/mix/rand{j}/T2"]["even"][0]) for j in range(N_RANDOM_FRAMES)) for cell in CELLS]
-    print(f"{'L9 mixer swap, inside a random frame (max)':46s}" + "".join(f"{v:>10.3f}        " for v in largest))
+            row = ""
+            for cell in CELLS:
+                six, two, down = (result["shares"][cell][f"link/{base}/{part}/{route}"]["even"][0] for route in ("F2", "T2", "down"))
+                row += f"{six:>9.3f} / {two:.3f} ({down:.3f})"
+            print(f"{label + ', ' + what:42s}" + row)
+    row = ""
+    for cell in CELLS:
+        six, two = (max(abs(result["shares"][cell][f"link/mix/rand{j}/{route}"]["even"][0]) for j in range(N_RANDOM_FRAMES)) for route in ("F2", "T2"))
+        row += f"{six:>9.3f} / {two:.3f}        "
+    print(f"{'L9 mixer swap, inside a random frame (max)':42s}" + row)
     fraction = result["energy_fraction_t189_swap"]
     print(f"\nenergy of transform {L8_TRANSFORM}'s swapped write inside the 4-dimensional frame of group {L8_GROUP}: {fraction['group']:.3f}"
           f"   (random 4-dimensional frames: at most {max(v for k, v in fraction.items() if k.startswith('random')):.3f})")

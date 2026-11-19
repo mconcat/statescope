@@ -48,12 +48,14 @@ def link_table(result: dict) -> str:
         for part, what in (("full", "all of it"), ("g4885", "only the part inside group 4885's frame"), ("minus_g4885", "the rest")):
             cells = []
             for cell in CELLS:
-                t2 = result["shares"][cell][f"link/{base}/{part}/T2"]["even"][0]
-                down = result["shares"][cell][f"link/{base}/{part}/down"]["even"][0]
-                cells.append(f"{t2:.3f} ({down:.3f})")
+                six, two, down = (result["shares"][cell][f"link/{base}/{part}/{route}"]["even"][0] for route in ("F2", "T2", "down"))
+                cells.append(f"{six:.3f} / {two:.3f} ({down:.3f})")
             lines.append(f"| {label}, {what} | " + " | ".join(cells) + " |")
-    largest = [max(abs(result["shares"][cell][f"link/mix/rand{j}/T2"]["even"][0]) for j in range(5)) for cell in CELLS]
-    lines.append("| whole mixer swap, only the part inside a random 4-dimensional frame (largest of 5, absolute) | " + " | ".join(f"{v:.3f}" for v in largest) + " |")
+    cells = []
+    for cell in CELLS:
+        six, two = (max(abs(result["shares"][cell][f"link/mix/rand{j}/{route}"]["even"][0]) for j in range(5)) for route in ("F2", "T2"))
+        cells.append(f"{six:.3f} / {two:.3f}")
+    lines.append("| whole mixer swap, only the part inside a random 4-dimensional frame (largest of 5, absolute) | " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
 
