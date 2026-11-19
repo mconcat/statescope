@@ -24,16 +24,17 @@ ROWS = [("L9 mixer, whole output", "layer_y"), ("L9 mixer, head 10 only", "head_
 def layer_table(manifest: dict, reader_fvu: dict, always_on: dict | None = None) -> str:
     """state and first MLP column: this repository's reader on all held-out tokens, raw units, position 0 dropped (reader_fvu.json);
     the other MLP columns: recorded by the original project at training time (manifest); with `always_on` (the original project's
-    ALWAYS_ON.json), one more column: the number of transforms that fire on at least 90% of its tokens"""
+    ALWAYS_ON.json), one more column: the number of transforms that fire on at least 90% of the tokens, counted by the original
+    project on two texts (a web text sample / the held-out shard of the training mix; the two counts differ at some layers)"""
     head = ["Layer", "State FVU, `resid_mid`", "State FVU, `resid_post`", "MLP FVU", "MLP FVU recorded at training", "MLP transforms on per token",
-            "MLP transforms alive", "MLP penalty"] + (["MLP transforms on at 90% of tokens or more"] if always_on is not None else [])
+            "MLP transforms alive", "MLP penalty"] + (["MLP transforms on at 90% of tokens or more (web text / training mix)"] if always_on is not None else [])
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for layer, e in manifest["layers"].items():
         m, r = e["mlp"], reader_fvu["layers"][layer]
         row = (f"| {layer} | {r[f'resid_mid.{layer}']['position_0_dropped']:.4f} | {r[f'resid_post.{layer}']['position_0_dropped']:.4f} | "
                f"{r['mlp']['position_0_dropped']:.4f} | {m['heldout_fvu']:.4f} | {m['heldout_l0']:.1f} | {m['alive']} of {m['transforms']} | {m['penalty']:g} |")
         if always_on is not None:
-            row += f" {len(always_on['layers'][layer]['on_90pct'])} |"
+            row += f" {len(always_on['layers'][layer]['on_90pct'])} / {always_on['layers'][layer]['training_mix_heldout_counts']['on_90pct']} |"
         lines.append(row)
     return "\n".join(lines)
 
