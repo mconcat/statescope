@@ -281,3 +281,54 @@ corpus's layer-9 calibration folder must be bit-identical to those of the same r
 (b) `PublicMolt(<pre-norm export>)` must raise `ValueError` (this reader handles post-norm input only), not read the dictionary with the
 wrong input.
 This checks the format only; the layer-9 dictionary of the old corpus is not compared with a reference forward.
+
+**R8.7 The frozen release folder (written 2026-11-19, before these checks were run).** The original project froze the 0.8B set on
+2026-11-18: the MLP dictionaries were copied into one folder per layer (`weights.safetensors`, `postnorm.safetensors`, `config.yaml`
+without training-time paths, `MANIFEST.json`), layers 0-22 from the exports R8 read and layer 23 from another run (lower penalty); on
+2026-11-19 it rewrote the safetensors headers' metadata (which held absolute paths) and left the tensor bytes alone.
+(a) Every file's sha256 equals the manifest's.
+(b) Layers 0-22: every tensor that `PublicMolt(<release folder>)` holds is bit-identical to the one `PublicMolt(<export R8 read>,
+post_norm=<rebuilt file>)` holds, and `eps` is equal. With (b), R8.3-R8.5 carry over to these layers without a new reference run.
+(c) Layer 23: R8.3, R8.4 and R8.5 as written, with the release folder as the export and its own `postnorm.safetensors`.
+(d) No safetensors header and no config of the release folder, and no `cfg.json` or header of the 24 state dictionaries, contains
+`/home/`, `/mnt/`, `/root/`, `/workspace`, a host name of the lab or an IPv4 address.
+The state dictionaries of the frozen set are the 24 folders R8.1-R8.2 read; nothing new is checked for them here.
+
+## R9. Line-count demonstration (written 2026-11-19, before the reference script or the port was run)
+
+`demo/line_count.py` repeats, on the frozen 0.8B set and with this package's readers, part of a chain the original project traced
+(`notes/demo_line_count_L8_L9.md` in snapshot 3): L8 MLP transform 189 -> state group 11586 of `resid_post.8` -> the model's own L9
+mixer (GDN head 10) -> L9 MLP transforms 410 and 1749. Only the links that do not pass through the original's GDN dictionary (which is
+not released) are repeated. The reference is `tests/legacy_scripts/demo_reference.py`, run inside snapshot 3 on the same device: the
+original's own batch, patch, pairing and share functions, with its GDN dictionary left unloaded.
+
+Definitions, all the original's: items = `build_items(seed 0)` of the cells count:60, count:100, width:100, 64 pairs each, 256 tokens;
+margin m = logsumexp(newline tokens) - logsumexp(space tokens) at the last token; a patch replaces a tensor of the clean run by a value
+built from the corrupt run moved onto the clean positions (`paired`), the patched tensor is rounded to bf16 as the original does;
+share = mean(m_c - m_p) / mean(m_c - m_x); halves = even / odd item index; batches of 32 with the short batch padded by its first item.
+
+**R9.1 Items.** The item file in the repository equals the reference's items exactly (token ids of both texts, pairing, all 192 pairs).
+
+**R9.2 Shares.** For every arm, cell and half (all, even, odd): |share(new) - share(reference)| <= 0.005. This is the tolerance the
+original registration set for reproducing a recorded share (`REGISTRATION.md`, gates G1 and G2: "±.005"). Arms:
+unpatched margins (m_c, m_x enter every share); the L9 mixer's whole output swapped; head 10's output swapped (the original's exact
+fp32 recurrence, gated norm with the clean gate, head 10's output columns); through the model's own L9 mixer, with the residual's
+direct path held at clean: all of `resid_post.8` swapped, the true MLP 8 output swapped, all L8 transforms' writes swapped, transform
+189's write swapped, state group 11586's contribution swapped; at the L9 MLP output: the true output swapped, all transforms' writes
+swapped, transform 410's write, transform 1749's write. Arms that the original project adds for the group-4885 link on the model's own
+mixer (its registration `true_mixer_REGISTRATION.md`, measured after this rule was written) come under this same rule when ported.
+
+**R9.3 Recorded numbers.** Where the note or its result files record a share of one of these arms (three decimals), the new share is
+within 0.005 of the record as well. Records measured on another day's process are not expected to be bit-reproducible.
+
+**R9.4 Gates and descriptive numbers.** Gate values of transforms 189 (L8), 410 and 1749 (L9) on the clean items: rule R0 per 4,096
+tokens. The firing rates (line-first tokens / newline tokens / other tokens, position 0 and tokens before the first newline dropped)
+and the fraction of transform 189's swapped-write energy inside group 11586's 4-dimensional frame: |new - reference| <= 0.005, and
+within 0.005 of the record where one exists.
+
+**R9.5 Reported, not pass/fail.** The largest per-item margin difference between the new script and the reference, per arm; the same
+between two runs of the reference (run-to-run repeatability of the original code); peak GPU memory. Prediction: unpatched margins
+are bit-identical, every share difference is below 0.001.
+
+Not covered by R9: everything in the note that passes through the GDN dictionary's registers; the selection of the transforms and
+groups (the demonstration takes the original's choices as given and says so); other cells, seeds or models.
