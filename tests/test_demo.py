@@ -102,10 +102,18 @@ def test_shares(reference, demo) -> None:
     assert not bad, bad
 
 
+LINK_RECORD = "true_mixer_link.json"   # the original project's result file of the group-4885 link, measured after snapshot 3 was frozen
+LINK_NAMES = {"full": "full", "g4885": "proj_g4885", "minus_g4885": "minus_g4885"}
+
+
 def _recorded(settings: Settings) -> dict[str, dict[str, dict[str, float]]]:
-    """cell -> arm -> half -> the share in the original's result files (snapshot 3)"""
+    """cell -> arm -> half -> the share in the original's result files (snapshot 3; the link arms from the original's results folder)"""
     folder = settings.need_snapshot3() / "results" / "demo_line_count"
     gates, s2, s3, s4 = (json.loads((folder / f"{name}.json").read_text()) for name in ("gates", "s2", "s3", "s4"))
+    link_file = settings.need_legacy_results() / "demo_line_count" / LINK_RECORD
+    if not link_file.is_file():
+        pytest.fail(f"the original project's record of the group-4885 link is missing: {link_file}", pytrace=False)
+    link = json.loads(link_file.read_text())
     out: dict[str, dict[str, dict[str, float]]] = {}
     for cell in CELLS:
         rows = {
@@ -116,6 +124,13 @@ def _recorded(settings: Settings) -> dict[str, dict[str, dict[str, float]]]:
             "l9/mlp9_y": s2["cells"][cell]["mlp9_y"], "l9/molt9_all": s2["cells"][cell]["M9_whole"],
             "l9/t410": s2["cells"][cell]["singles"]["410"], "l9/t1749": s2["cells"][cell]["singles"]["1749"],
         }
+        share = link["cells"][cell]["share"]
+        for base in ("mix", "h10o"):
+            for mine, theirs in LINK_NAMES.items():
+                for route in ("down", "T2"):
+                    rows[f"link/{base}/{mine}/{route}"] = share[f"{base}/{theirs}"][route]
+        for j in range(5):
+            rows[f"link/mix/rand{j}/T2"] = share[f"mix/proj_rand{j}"]["T2"]
         out[cell] = {arm: {half: row[half][0] for half in HALVES} for arm, row in rows.items()}
     return out
 

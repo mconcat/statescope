@@ -16,7 +16,9 @@ The chain (found by the original project; this script takes its choice of transf
   2. The model's own L9 mixer reads that: swapping only transform 189's write, or only group 11586, in what the L9 mixer reads moves
      the answer about as much as swapping the whole L8 MLP output. Inside the L9 mixer, GDN head 10 carries the count.
   3. L9 MLP dictionary: transform 410 (on while the line is short) and transform 1749 (on once the line is long) turn the count into
-     the line-break decision.
+     the line-break decision. What they read of the mixer's write lies mostly inside the 4-dimensional frame of state group 4885
+     of resid_mid.9: that part alone moves the two transforms about as much as the whole write, the rest moves them little
+     (the rest still reaches the answer by other routes).
 
     python demo/line_count.py --release <folder with state/ and mlp/> [--device cuda:0] [--out result_folder]
 
@@ -44,6 +46,7 @@ BATCH = 32
 HEAD = 10                          # GDN head of layer 9 that carries the count
 L8_TRANSFORM, L8_GROUP = 189, 11586
 L9_TRANSFORMS = (410, 1749)
+L9_GROUP = 4885                    # state group of resid_mid.9 whose frame carries the count from the mixer to the L9 transforms
 N_RANDOM_FRAMES = 5
 ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_count_items.safetensors")
 
@@ -238,11 +241,12 @@ def in_frame(frame: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 
 # ---------------------------------------------------------------------------------------------- the measurement
 @torch.inference_mode()
-def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt, vocab8: StateVocab) -> tuple[dict, dict]:
+def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt, vocab8: StateVocab,
+            vocab9: StateVocab) -> tuple[dict, dict]:
     device = engine.lm.device
     mixer9, site8 = engine.mixer9, "resid_post.8"
     head_columns = mixer9.out_proj.weight[:, HEAD * mixer9.head_v_dim:(HEAD + 1) * mixer9.head_v_dim].float()
-    frame = vocab8.Q[L8_GROUP]
+    frame, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
     generator = torch.Generator().manual_seed(0)
     random_frames = [torch.linalg.qr(torch.randn(vocab8.d, 4, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
     margins: dict[str, list[torch.Tensor]] = {}
@@ -276,8 +280,8 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
             with_mix9(onto_clean(x.mix9, c.mix9, pairing), "layer_y")
             o_c, z_c = head_state_read(gdn_inputs(mixer9, c.mixer_in9), HEAD)
             o_x, _ = head_state_read(gdn_inputs(mixer9, x.mixer_in9), HEAD)
-            d_head = head_normed(mixer9, onto_clean(o_x, o_c, pairing), z_c) - head_normed(mixer9, o_c, z_c)
-            with_mix9(c.mix9 + d_head @ head_columns.T, "head_o")
+            d_head = (head_normed(mixer9, onto_clean(o_x, o_c, pairing), z_c) - head_normed(mixer9, o_c, z_c)) @ head_columns.T
+            with_mix9(c.mix9 + d_head, "head_o")
 
             # ---- a change of resid_post.8, sent through the model's own L9 mixer only (the residual's direct path stays clean)
             def mixer9_of(post8: torch.Tensor) -> torch.Tensor:
@@ -289,7 +293,9 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
             def through_mixer9(change: torch.Tensor, arm: str) -> None:
                 with_mix9(c.mix9 + mixer9_of(c.post8 + change) - mixer9_clean, arm)
 
-            flat = lambda t: t.reshape(B * T, d)
+            def flat(t: torch.Tensor) -> torch.Tensor:
+                return t.reshape(B * T, d)
+
             gate8_c, y8_c = molt8.forward(flat(c.mid8))
             _, y8_x = molt8.forward(flat(x.mid8))
             w189 = swap(molt8.transform_write(flat(x.mid8), L8_TRANSFORM).view(B, T, d), molt8.transform_write(flat(c.mid8), L8_TRANSFORM).view(B, T, d))
@@ -314,6 +320,26 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
             for t in L9_TRANSFORMS:
                 write_c, write_x = molt9.transform_write(flat(c.mid9), t).view(B, T, d), molt9.transform_write(flat(x.mid9), t).view(B, T, d)
                 with_mlp9(c.mlp9 + swap(write_x, write_c), f"l9/t{t}")
+
+            # ---- the link: the mixer's swap (whole, or head 10's), all of it / only its part inside group 4885's frame / the rest.
+            #      `down` = added at the mixer output; `T2` = only the change it causes in the writes of transforms 410 and 1749
+            def writes9(mid9: torch.Tensor) -> torch.Tensor:
+                return sum(molt9.transform_write(flat(mid9), t) for t in L9_TRANSFORMS).view(B, T, d)
+
+            writes9_clean = writes9(c.mid9)
+
+            def link(change: torch.Tensor, arm: str) -> None:
+                with_mix9(c.mix9 + change, f"link/{arm}/down")
+                with_mlp9(c.mlp9 + writes9(c.mid9 + change) - writes9_clean, f"link/{arm}/T2")
+
+            d_mix = swap(x.mix9, c.mix9)
+            for base, change in (("mix", d_mix), ("h10o", d_head)):
+                inside = in_frame(frame9, change)
+                link(change, f"{base}/full")
+                link(inside, f"{base}/g4885")
+                link(change - inside, f"{base}/minus_g4885")
+            for j, fr in enumerate(random_frames):
+                with_mlp9(c.mlp9 + writes9(c.mid9 + in_frame(fr, d_mix)) - writes9_clean, f"link/mix/rand{j}/T2")
 
             gates["l8"].append(gate8_c[:, [L8_TRANSFORM]].view(B, T, -1).cpu())
             gates["l9"].append(gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1).cpu())
@@ -364,6 +390,15 @@ def print_summary(result: dict) -> None:
     for name, arm in rows:
         cells = [result["shares"][cell][arm] for cell in CELLS]
         print(f"{name:46s}" + "".join(f"{v['even'][0]:>10.3f} ({v['all'][0]:.3f})" for v in cells))
+    print(f"\nthe link from the L9 mixer to L9 transforms {L9_TRANSFORMS[0]} and {L9_TRANSFORMS[1]}: share carried through those two transforms' writes"
+          f" (even-numbered items; in brackets: the same change with everything downstream)")
+    print(f"{'':46s}" + "".join(f"{cell:>18s}" for cell in CELLS))
+    for base, label in (("mix", "L9 mixer swap"), ("h10o", f"head {HEAD} swap")):
+        for part, what in (("full", "all of it"), ("g4885", f"inside group {L9_GROUP}'s frame"), ("minus_g4885", "the rest")):
+            cells = [(result["shares"][cell][f"link/{base}/{part}/T2"]["even"][0], result["shares"][cell][f"link/{base}/{part}/down"]["even"][0]) for cell in CELLS]
+            print(f"{label + ', ' + what:46s}" + "".join(f"{t2:>10.3f} ({down:.3f})" for t2, down in cells))
+    largest = [max(abs(result["shares"][cell][f"link/mix/rand{j}/T2"]["even"][0]) for j in range(N_RANDOM_FRAMES)) for cell in CELLS]
+    print(f"{'L9 mixer swap, inside a random frame (max)':46s}" + "".join(f"{v:>10.3f}        " for v in largest))
     fraction = result["energy_fraction_t189_swap"]
     print(f"\nenergy of transform {L8_TRANSFORM}'s swapped write inside the 4-dimensional frame of group {L8_GROUP}: {fraction['group']:.3f}"
           f"   (random 4-dimensional frames: at most {max(v for k, v in fraction.items() if k.startswith('random')):.3f})")
@@ -386,7 +421,8 @@ def main() -> None:
     molt8 = PublicMolt(os.path.join(args.release, "mlp", "L8"), device=args.device)
     molt9 = PublicMolt(os.path.join(args.release, "mlp", "L9"), device=args.device)
     vocab8 = StateVocab(os.path.join(args.release, "state", "L8"), device=args.device)
-    tensors, info = measure(engine, load_file(args.items), molt8, molt9, vocab8)
+    vocab9 = StateVocab(os.path.join(args.release, "state", "L9"), device=args.device)
+    tensors, info = measure(engine, load_file(args.items), molt8, molt9, vocab8, vocab9)
     result = summarize(tensors, info)
     print_summary(result)
     if args.out is not None:

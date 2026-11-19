@@ -10,6 +10,12 @@ Arms (rule R9.2), each a per-item margin after one patch:
   layer_y, head_o                                           the L9 mixer's whole output / head 10's output, swapped
   l8/{full_post8, mlp8_true, molt8_all, t189, g11586}       a change of resid_post.8 sent through the model's own L9 mixer only
   l9/{mlp9_y, molt9_all, t410, t1749}                       a change of the L9 MLP output
+  link/{mix, h10o}/{full, g4885, minus_g4885}/{down, T2}    the L9 mixer's swap (whole, or head 10's), all of it / only its part inside the
+                                                            frame of state group 4885 of resid_mid.9 / the rest; `down` = added at the mixer
+                                                            output, `T2` = only the write change of transforms 410 and 1749 that it causes
+  link/mix/rand<j>/T2                                       the same through random 4-dimensional frames
+(the link arms follow measure/demo_line_count_tm/tm_link.py of the original project, written after snapshot 3 was frozen: its definitions
+are repeated here with snapshot 3's own helpers)
 Writes <out>/reference.safetensors (margins, items, gates, labels) and <out>/info.json (shares, descriptive numbers).
 """
 import argparse
@@ -24,6 +30,7 @@ from _hermetic import assert_hermetic, cap_gpu
 HEAD = 10
 T189, G11586 = 189, 11586
 T9 = (410, 1749)
+G4885 = 4885
 RAND_FRAMES = 5
 
 
@@ -58,6 +65,7 @@ def main() -> None:
     eng, m9 = ctx.eng, ctx.m9
     S8 = D.Site(ctx.V[8], "resid_post.8")
     Q = ctx.V[8].Q[G11586]
+    Q9 = ctx.V[9].Q[G4885]
     rand = D.rand_frames(eng.d, RAND_FRAMES, 0, ctx.dev)
 
     out: dict[str, torch.Tensor] = {}
@@ -74,7 +82,8 @@ def main() -> None:
             hq_c, hq_x = GD.head_inputs(m9, c["x9"], [HEAD])[HEAD], GD.head_inputs(m9, x["x9"], [HEAD])[HEAD]
             oc, ox = C.recur(hq_c), C.recur(hq_x)
             n_c = C.head_norm_out(m9, oc, hq_c["z"]).float()
-            b.run_mix9(c["mix9"] + (C.head_norm_out(m9, b.pair(ox, oc), hq_c["z"]).float() - n_c) @ ctx.cols.T, "head_o")
+            d_head = (C.head_norm_out(m9, b.pair(ox, oc), hq_c["z"]).float() - n_c) @ ctx.cols.T
+            b.run_mix9(c["mix9"] + d_head, "head_o")
             del hq_x, oc, ox
             # ---- changes of resid_post.8 through the model's own L9 mixer (s3_mlp8.path, the `true` arm)
             y_true_c = b.true_mix9(c["post8"])
@@ -111,6 +120,23 @@ def main() -> None:
             b.run_mlp9(c["mlp9"] + b.pair(Rx9.at.reshape(sh), Rc9.at.reshape(sh)) - Rc9.at.reshape(sh), "l9/molt9_all")
             for u in T9:
                 b.run_mlp9(c["mlp9"] + D.atoms_diff(b, Rc9, Rx9, [u], "write"), f"l9/t{u}")
+            # ---- the mixer's swap restricted to group 4885's frame of resid_mid.9, on its way to transforms 410 and 1749 (tm_link.py, pass 2)
+            bases = {"mix": b.pair(x["mix9"], c["mix9"]) - c["mix9"], "h10o": d_head}
+            w0 = Rc9.atoms(list(T9), "write")
+            arms = {}
+            for bn, d in bases.items():
+                arms[f"{bn}/full"], arms[f"{bn}/g4885"] = d, D.proj(Q9, d)
+                arms[f"{bn}/minus_g4885"] = d - arms[f"{bn}/g4885"]
+            for nm, dv in arms.items():
+                b.run_mix9(c["mix9"] + dv, f"link/{nm}/down")
+                R2 = b.mlp_molt(9, c["mid9"] + dv)
+                b.run_mlp9(c["mlp9"] + (R2.atoms(list(T9), "write") - w0).view(sh), f"link/{nm}/T2")
+                del R2
+            for j, fr in enumerate(rand):
+                R2 = b.mlp_molt(9, c["mid9"] + D.proj(fr, bases["mix"]))
+                b.run_mlp9(c["mlp9"] + (R2.atoms(list(T9), "write") - w0).view(sh), f"link/mix/rand{j}/T2")
+                del R2
+            del arms, bases
             # ---- gates on the clean items, token labels
             rr = b.real.to(ctx.dev)
             gates["l8"].append(Rc8.gate[:, [T189]].view(b.B, T, -1)[rr].float().cpu())

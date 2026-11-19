@@ -42,6 +42,21 @@ def demo_table(result: dict) -> str:
     return "\n".join(lines)
 
 
+def link_table(result: dict) -> str:
+    lines = ["| Change at the L9 mixer output | " + " | ".join(CELLS) + " |", "|---|---|---|---|"]
+    for base, label in (("mix", "whole mixer swap"), ("h10o", "head 10 swap")):
+        for part, what in (("full", "all of it"), ("g4885", "only the part inside group 4885's frame"), ("minus_g4885", "the rest")):
+            cells = []
+            for cell in CELLS:
+                t2 = result["shares"][cell][f"link/{base}/{part}/T2"]["even"][0]
+                down = result["shares"][cell][f"link/{base}/{part}/down"]["even"][0]
+                cells.append(f"{t2:.3f} ({down:.3f})")
+            lines.append(f"| {label}, {what} | " + " | ".join(cells) + " |")
+    largest = [max(abs(result["shares"][cell][f"link/mix/rand{j}/T2"]["even"][0]) for j in range(5)) for cell in CELLS]
+    lines.append("| whole mixer swap, only the part inside a random 4-dimensional frame (largest of 5, absolute) | " + " | ".join(f"{v:.3f}" for v in largest) + " |")
+    return "\n".join(lines)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--release", required=True, type=Path)
@@ -53,7 +68,8 @@ def main() -> None:
     shutil.copyfile(args.release / "MANIFEST.json", DEST / "MANIFEST.json")
     (DEST / "layers_table.md").write_text(layer_table(manifest) + "\n")
     (DEST / "line_count_table.md").write_text(demo_table(result) + "\n")
-    print(f"wrote MANIFEST.json, layers_table.md and line_count_table.md to {DEST}")
+    (DEST / "line_count_link_table.md").write_text(link_table(result) + "\n")
+    print(f"wrote MANIFEST.json, layers_table.md, line_count_table.md and line_count_link_table.md to {DEST}")
 
 
 if __name__ == "__main__":

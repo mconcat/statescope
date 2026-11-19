@@ -342,5 +342,14 @@ elements of one batch and moves single items' margins by 0.04-0.09 (three draws 
 0). Two runs of the reference are bit-identical in every margin. So single-item margins of dictionary arms are reproducible only to
 about 0.1, and shares over 32 or 64 items to about 0.003.
 
+*Link arms (2026-11-19, added after their first run).* The original project registered and measured the group-4885 link on the
+model's own mixer the same day (`true_mixer_REGISTRATION.md`, `true_mixer_link.json` in its results; code
+`measure/demo_line_count_tm/tm_link.py`, written after snapshot 3 was frozen). Seventeen arms were ported under R9.2 and R9.3 as
+announced: the whole mixer swap and head 10's swap, each whole / inside group 4885's frame / the rest, each with everything downstream
+and through the writes of transforms 410 and 1749 only, and the whole mixer swap inside five random frames. The reference script
+repeats the original's definitions with snapshot 3's own helpers; the record is the original's result file, read from the original
+results folder, not from a snapshot. First run: all 153 share comparisons within 0.0030 of the reference and within 0.0022 of the
+record.
+
 Not covered by R9: everything in the note that passes through the GDN dictionary's registers; the selection of the transforms and
 groups (the demonstration takes the original's choices as given and says so); other cells, seeds or models.
