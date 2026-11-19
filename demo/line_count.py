@@ -126,6 +126,7 @@ class HookedModel:
         self.model, self.layers = lm.model, lm.layers
         self.final_norm = lm.model.model.norm
         self.mixer9 = self.layers[9].linear_attn
+        self.dtype = lm.model.dtype                     # bf16: the residual and every module's output are in this dtype
 
     @torch.inference_mode()
     def run(self, ids: torch.Tensor, patch_mix9: Patch | None = None, patch_mlp9: Patch | None = None) -> Run:
@@ -222,9 +223,27 @@ def head_state_read(p: dict[str, torch.Tensor], head: int) -> tuple[torch.Tensor
 
 
 def head_normed(mixer, o: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+    """One head's read o (B, T, dv) through the mixer's gated norm with gate z, computed in the model's dtype; fp32 result."""
     B, T, dv = o.shape
     dtype = mixer.out_proj.weight.dtype
     return mixer.norm(o.reshape(-1, dv).to(dtype), z.reshape(-1, dv).to(dtype)).reshape(B, T, dv).float()
+
+
+def head_swapped_write(mixer, head: int, mixer_in_clean: torch.Tensor, mixer_in_corrupt: torch.Tensor, pairing: torch.Tensor) -> torch.Tensor:
+    """How the mixer's output (B, T, d) changes when one head alone reads the corrupt text. The head's read is computed by hand for
+    both texts, the corrupt read is moved onto the clean positions, and both go through the head's norm with the clean gate and
+    through the head's columns of the output projection. Returns swapped minus clean, fp32."""
+    head_columns = mixer.out_proj.weight[:, head * mixer.head_v_dim:(head + 1) * mixer.head_v_dim].float()
+    o_c, z_c = head_state_read(gdn_inputs(mixer, mixer_in_clean), head)
+    o_x, _ = head_state_read(gdn_inputs(mixer, mixer_in_corrupt), head)
+    return (head_normed(mixer, onto_clean(o_x, o_c, pairing), z_c) - head_normed(mixer, o_c, z_c)) @ head_columns.T
+
+
+def mixer9_of(model: HookedModel, post8: torch.Tensor) -> torch.Tensor:
+    """The output (B, T, d), fp32, of the model's own L9 mixer for a given resid_post.8 (B, T, d): layer 9's input norm in the
+    model's dtype, then the mixer by hand."""
+    seen = model.layers[9].input_layernorm(post8.to(model.dtype))
+    return gdn_output(model.mixer9, gdn_inputs(model.mixer9, seen)).float()
 
 
 # ---------------------------------------------------------------------------------------------- pairing, shares, labels
@@ -284,8 +303,7 @@ def in_frame(frame: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 def measure(model: HookedModel, score: LineBreakScore, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt,
             vocab8: StateVocab, vocab9: StateVocab) -> tuple[dict, dict]:
     device = model.lm.device
-    mixer9, site8 = model.mixer9, "resid_post.8"
-    head_columns = mixer9.out_proj.weight[:, HEAD * mixer9.head_v_dim:(HEAD + 1) * mixer9.head_v_dim].float()
+    site8 = "resid_post.8"
     frame, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
     generator = torch.Generator().manual_seed(0)
     random_frames = [torch.linalg.qr(torch.randn(vocab8.d, FRAME_DIM, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
@@ -318,20 +336,14 @@ def measure(model: HookedModel, score: LineBreakScore, items: dict[str, torch.Te
 
             # ---- the L9 mixer: its whole output swapped; only head 10's read swapped
             with_mix9(onto_clean(x.mix9, c.mix9, pairing), "layer_y")
-            o_c, z_c = head_state_read(gdn_inputs(mixer9, c.mixer_in9), HEAD)
-            o_x, _ = head_state_read(gdn_inputs(mixer9, x.mixer_in9), HEAD)
-            d_head = (head_normed(mixer9, onto_clean(o_x, o_c, pairing), z_c) - head_normed(mixer9, o_c, z_c)) @ head_columns.T
+            d_head = head_swapped_write(model.mixer9, HEAD, c.mixer_in9, x.mixer_in9, pairing)
             with_mix9(c.mix9 + d_head, "head_o")
 
             # ---- a change of resid_post.8, sent through the model's own L9 mixer only (the residual's direct path stays clean)
-            def mixer9_of(post8: torch.Tensor) -> torch.Tensor:
-                seen = model.layers[9].input_layernorm(post8.to(c.mixer_in9.dtype))
-                return gdn_output(mixer9, gdn_inputs(mixer9, seen)).float()
-
-            mixer9_clean = mixer9_of(c.post8)
+            mixer9_clean = mixer9_of(model, c.post8)
 
             def through_mixer9(change: torch.Tensor, arm: str) -> None:
-                with_mix9(c.mix9 + mixer9_of(c.post8 + change) - mixer9_clean, arm)
+                with_mix9(c.mix9 + mixer9_of(model, c.post8 + change) - mixer9_clean, arm)
 
             def flat(t: torch.Tensor) -> torch.Tensor:
                 return t.reshape(B * T, d)
