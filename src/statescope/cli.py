@@ -1,7 +1,7 @@
-"""Command line of the package: one subcommand per step of the pipeline.
+"""Command line of the EARLIER design: one subcommand per step of its pipeline.
 
-This is the command line of the EARLIER design (its modules are in statescope.earlier_design). The file stays at statescope/cli.py
-because the installed console script `statescope` points at statescope.cli:main.
+Its modules are in statescope.earlier_design. The file stays at statescope/cli.py because the installed console script `statescope`
+points at statescope.cli:main.
 
     statescope verify    --manifest release/qwen35-08b/manifest.json --root <release folder>
     statescope calibrate --model qwen3.5-0.8b --layer 19 --out <calib dir>            <data paths>
