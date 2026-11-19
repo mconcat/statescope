@@ -17,8 +17,8 @@ from typing import Callable, Iterator
 
 import torch
 
-from statescope.earlier_design.calibration import CalibStats
 from statescope.config import SOURCES
+from statescope.earlier_design.calibration import CalibStats
 from statescope.earlier_design.data.mix import MixStream, Part
 from statescope.lm import Capturer
 

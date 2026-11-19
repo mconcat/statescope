@@ -67,8 +67,8 @@ def cmd_verify(args: argparse.Namespace) -> None:
 
 
 def cmd_calibrate(args: argparse.Namespace) -> None:
-    from statescope.lm import load_language_model
     from statescope.earlier_design.prep.calibrate import calibrate
+    from statescope.lm import load_language_model
     mix = _mix(args.model)                      # before anything is loaded
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -77,8 +77,8 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
 
 def cmd_fixedmap(args: argparse.Namespace) -> None:
     from statescope.earlier_design.data.mix import training_stream
-    from statescope.lm import load_language_model
     from statescope.earlier_design.prep.fixedmap import fixed_map
+    from statescope.lm import load_language_model
     mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -114,9 +114,9 @@ def cmd_train_vocab(args: argparse.Namespace) -> None:
 def cmd_train_molt(args: argparse.Namespace) -> None:
     from safetensors.torch import load_file
 
-    from statescope.lm import Capturer
     from statescope.earlier_design.molt.recipe import MoltRecipe
     from statescope.earlier_design.molt.train import train_molt
+    from statescope.lm import Capturer
     stats, lm, stream = _training_setup(args)
     capturer = Capturer(lm, args.layer, _mix(args.model).min_pos)
     skip_map = load_file(args.fixmap)["W_skip_std"]
