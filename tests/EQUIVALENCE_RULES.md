@@ -296,6 +296,21 @@ an absolute path under a home, mount, root or workspace folder, a host name of t
 against committed machine paths rejects, so it was reworded on the same day without changing what is checked).
 The state dictionaries of the frozen set are the 24 folders R8.1-R8.2 read; nothing new is checked for them here.
 
+**R8.8 Reconstruction error on all held-out tokens, and what the configs say (written 2026-11-19, before the measurement of all
+layers was run).** The trainer's held-out number of the state dictionary (R8.2) uses the first 4,096 tokens of each split. At early
+layers that subset is easier than the whole split: with this reader, layer 0 `resid_mid` gives 0.0533 on the subset and 0.0693 on all
+tokens (own units), layer 9 gives 0.2452 and 0.2438; position 0 changes neither by more than 0.001. (These two layers were looked at
+before this rule was written, to find the cause of the mismatch with the original project's table.) The model card therefore
+reports numbers on all held-out tokens, measured by `devtools/measure_release2.py` with this reader.
+(a) State dictionary, raw units, position 0 dropped, all tokens of the four held-out splits: for every layer and both sites the new
+number is within 1e-4 of the original project's `table.json` (`raw_mid`, `raw_post`), and the same with position 0 included
+(`raw_with_pos0_mid`, `raw_with_pos0_post`). The original's reader is the one of R8.1.
+(b) MLP dictionary on the same tokens: reported, with and without position 0; there is no record to compare with (the original's
+held-out shard is gone), so nothing is asserted except that the number is finite and below 1.
+(c) Configs: all 24 state `cfg.json` hold the same training facts (tokens 30,003,200, steps 7,325, 16,384 groups of 4, k 24, form
+`bsf`, input `token_rms`, eps 1e-6, seed 0); all 24 MLP `config.yaml` are equal apart from the layer index, the logger name and the
+penalty, which is 7.5e-05 at layers 0-22 and 2.5e-05 at layer 23.
+
 ## R9. Line-count demonstration (written 2026-11-19, before the reference script or the port was run)
 
 `demo/line_count.py` repeats, on the frozen 0.8B set and with this package's readers, part of a chain the original project traced
