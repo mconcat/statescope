@@ -1,19 +1,22 @@
 """Lay out the frozen 0.8B set (second design) in the folder structure it is published in, without copying a tensor.
 
     <dest>/MANIFEST.json
+    <dest>/README.md                                                           the model card (a copy), if --card is given
     <dest>/state/L<L>/{cfg.json, weights.safetensors, usage.safetensors}       state dictionary of layer L (two sites: resid_mid.L, resid_post.L)
     <dest>/mlp/L<L>/{config.yaml, weights.safetensors, postnorm.safetensors}   MLP dictionary of layer L
 
 Every file under state/ and mlp/ is a symbolic link to the original (about 29 GB stay where they are). MANIFEST.json holds, per layer and
 file, the sha256 of the bytes behind the link, and the numbers the original project recorded at training time. Both sources are only read.
 
-    python devtools/stage_release2.py --state-root <.../q08c/train1> --mlp-root <.../release_08b_v1> --dest release_stage2
+    python devtools/stage_release2.py --state-root <.../q08c/train1> --mlp-root <.../release_08b_v1> --dest release_stage2 \
+        [--card release/qwen35-08b-v2/MODEL_CARD.md]
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 N_LAYERS = 24
@@ -42,6 +45,7 @@ def main() -> None:
     ap.add_argument("--state-root", required=True, type=Path, help="holds L<L>/B1/vocab_B1s0/final and L<L>/B1/layer_recipe_done.json")
     ap.add_argument("--mlp-root", required=True, type=Path, help="the frozen folder of the MLP dictionaries: L<L>/ and MANIFEST.json")
     ap.add_argument("--dest", required=True, type=Path, help="folder to create (must not exist)")
+    ap.add_argument("--card", type=Path, default=None, help="model card to copy into the folder as README.md")
     args = ap.parse_args()
     if args.dest.exists():
         raise FileExistsError(f"{args.dest} exists; stage into a new folder")
@@ -91,6 +95,8 @@ def main() -> None:
         "layers": layers,
     }
     (args.dest / "MANIFEST.json").write_text(json.dumps(manifest, indent=1) + "\n")
+    if args.card is not None:
+        shutil.copyfile(args.card, args.dest / "README.md")
     print(f"staged {N_LAYERS} layers into {args.dest}")
 
 
