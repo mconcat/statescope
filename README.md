@@ -166,7 +166,7 @@ The demonstration has these caveats:
 - `demo/line_count.py` runs the demonstration, and `demo/verify_release.py` checks the weights. `demo/line_count_items.safetensors` holds the demonstration items.
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
-- `devtools/` holds original-code freezing and tracing tools.
+- `devtools/` holds original-code freezing and tracing tools, tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
 - The earlier design's code is under `src/statescope/earlier_design/` in `vocab/`, `molt/`, `prep/`, `data/` and `train/`. The `statescope` command line and `release/qwen35-08b/` also belong to that design. `examples/reconstruct_texts.py` is an example for it.
 
 ## Tests
