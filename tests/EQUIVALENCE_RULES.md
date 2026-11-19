@@ -415,6 +415,10 @@ and `eps` is equal. With (b), R10.3-R10.5 carry over to the copy without a new r
 `bsf`, input `token_rms`, eps 1e-6, seed 0, width 2,560); all 32 MLP `config.yaml` of the copy are equal apart from the layer index
 and the logger name, with penalty 3e-05, 58,600 steps, batch 500, learning rate 4e-05 and 320 transforms per rank tier.
 (d) R8.7 (d) as written, for every header and config of the 32 + 32 folders.
+*Correction of (c), 2026-11-20, before any run:* after the rule was committed the original project reported that the two
+standardizer tables of the MLP dictionaries have 24 rows at layers 0-23 and 32 rows at layers 24-31 (`n_layers` of
+`input_standardizer` and `output_standardizer` in the config; only the layer's own row is read). So in (c) the MLP configs are equal
+apart from the layer index, the logger name and these two `n_layers` values, which are 24 at layers 0-23 and 32 at layers 24-31.
 
 **R10.7 Reconstruction error on all held-out tokens.** Measured with this reader on all tokens of the four held-out splits, raw units.
 (a) State dictionary: for every layer and both sites, within 1e-4 of `raw` in the original project's

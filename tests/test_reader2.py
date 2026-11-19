@@ -3,6 +3,7 @@ The pass/fail rules are R8.1 - R8.5 of tests/EQUIVALENCE_RULES.md (written befor
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,22 @@ LAYERS = range(24)
 N_TOKENS = 4096        # per held-out split: decisions
 N_TENSOR = 1024        # per held-out split: reconstructed tensors
 MEASURED = TEST_OUT / "measured" / "reader2"
+
+
+@dataclass(frozen=True)
+class LayerFiles:
+    """where one layer's two dictionaries and its held-out tokens are"""
+    calib: Path          # calibration folder: heldout_<split>/ with x = raw resid_mid, y = raw MLP output
+    vocab: Path          # state dictionary: cfg.json, weights.safetensors (two folders below the run's layer_recipe_done.json)
+    molt: Path           # MLP dictionary: weights.safetensors, config.yaml
+    post_norm: Path      # the layer's RMSNorm coefficients
+    measured: Path = MEASURED     # where the measured numbers are written
+    chunk: int | None = None      # tokens per public forward in the reference run (default of the reference script: 64)
+
+
+def files_08b(settings: Settings, layer: int, post_norm_dir: Path) -> LayerFiles:
+    """the 0.8B layer's training exports, with the post-norm file rebuilt from the language model"""
+    return LayerFiles(settings.calib2_dir(layer), settings.vocab2_dir(layer), settings.molt2_dir(layer) / "export", post_norm_dir / f"L{layer}.safetensors")
 
 
 @pytest.fixture(autouse=True)
@@ -56,36 +73,37 @@ def post_norm_dir(settings: Settings) -> Path:
     return out
 
 
-def _reference(settings: Settings, layer: int, post_norm_dir: Path | None, molt_dir: Path | None = None,
-               post_norm: Path | None = None) -> tuple[dict[str, torch.Tensor], dict, dict[str, tuple[torch.Tensor, torch.Tensor]]]:
-    """reference tensors and info of one layer (cached run inside the second snapshot), and the same held-out tokens loaded by the new code.
-    Default: the layer's training export with the post-norm file rebuilt from the language model; `molt_dir` + `post_norm` name another
-    copy of the MLP dictionary (the frozen release folder)."""
-    molt_dir = molt_dir or settings.molt2_dir(layer) / "export"
-    post_norm = post_norm or post_norm_dir / f"L{layer}.safetensors"
-    out = run_legacy("reader2_reference.py", [
-        "--layer", str(layer), "--calib-dir", str(settings.calib2_dir(layer)), "--vocab-dir", str(settings.vocab2_dir(layer)),
-        "--molt-dir", str(molt_dir), "--post-norm", str(post_norm),
-        "--n", str(N_TOKENS), "--n-tensor", str(N_TENSOR)], settings, snapshot=settings.need_snapshot2())
+def _reference(settings: Settings, layer: int, files: LayerFiles) -> tuple[dict[str, torch.Tensor], dict, dict[str, tuple[torch.Tensor, torch.Tensor]]]:
+    """reference tensors and info of one layer (cached run inside the second snapshot), and the same held-out tokens loaded by the new code"""
+    args = ["--layer", str(layer), "--calib-dir", str(files.calib), "--vocab-dir", str(files.vocab),
+            "--molt-dir", str(files.molt), "--post-norm", str(files.post_norm), "--n", str(N_TOKENS), "--n-tensor", str(N_TENSOR)]
+    if files.chunk is not None:
+        args += ["--chunk", str(files.chunk)]
+    out = run_legacy("reader2_reference.py", args, settings, snapshot=settings.need_snapshot2())
     info = json.loads((out / "info.json").read_text())
-    held = {s: load_heldout(str(settings.calib2_dir(layer)), s, N_TOKENS) for s in HELDOUT_SPLITS}
+    held = {s: load_heldout(str(files.calib), s, N_TOKENS) for s in HELDOUT_SPLITS}
     assert list(info["splits"]) == list(HELDOUT_SPLITS)
     for s, (x, y) in held.items():
         assert {"x": sha256_tensor(x), "y": sha256_tensor(y)} == info["input_sha256"][s], f"layer {layer}, split {s}: the two sides read different tokens"
     return load_file(str(out / "reference.safetensors")), info, held
 
 
-def _save(layer: int, name: str, measured: dict) -> None:
-    MEASURED.mkdir(parents=True, exist_ok=True)
-    (MEASURED / f"L{layer:02d}_{name}.json").write_text(json.dumps(measured, indent=1) + "\n")
+def _save(folder: Path, layer: int, name: str, measured: dict) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"L{layer:02d}_{name}.json").write_text(json.dumps(measured, indent=1) + "\n")
 
 
 @pytest.mark.parametrize("layer", LAYERS)
 def test_state_reader(layer: int, settings: Settings, device: str, post_norm_dir: Path) -> None:
-    ref, info, held = _reference(settings, layer, post_norm_dir)
-    vocab = StateVocab(str(settings.vocab2_dir(layer)), device)
+    check_state_reader(layer, settings, device, files_08b(settings, layer, post_norm_dir))
+
+
+def check_state_reader(layer: int, settings: Settings, device: str, files: LayerFiles) -> None:
+    """R8.1, R8.2 and R8.5 for one layer's state dictionary (also used for the 4B set, R10)"""
+    ref, info, held = _reference(settings, layer, files)
+    vocab = StateVocab(str(files.vocab), device)
     assert (vocab.cfg["form"], vocab.cfg["input"]) == ("bsf", "token_rms")
-    trainer = json.loads((settings.vocab2_dir(layer).parents[1] / "layer_recipe_done.json").read_text())["vocab_heldout_fvu"]["B1s0"]
+    trainer = json.loads((files.vocab.parents[1] / "layer_recipe_done.json").read_text())["vocab_heldout_fvu"]["B1s0"]
     measured: dict = {}
     for j, site in enumerate(vocab.sites):
         kind = site.split(".")[0]
@@ -120,19 +138,19 @@ def test_state_reader(layer: int, settings: Settings, device: str, post_norm_dir
         + (vocab.mu[0] + vocab.scale[0] * vocab.b_dec) * rms[0]
     decoded = vocab.decode(groups, codes, site, rms=rms)[0]
     measured["max_rel_diff_sum_of_group_writes_vs_decode_token0"] = float((whole - decoded).abs().max() / decoded.abs().max())
-    _save(layer, "vocab", measured)
+    _save(files.measured, layer, "vocab", measured)
     assert measured["max_rel_diff_sum_of_group_writes_vs_decode_token0"] <= 1e-6, measured
 
 
 @pytest.mark.parametrize("layer", LAYERS)
 def test_molt_reader(layer: int, settings: Settings, device: str, post_norm_dir: Path) -> None:
-    check_molt_reader(layer, settings, device, settings.molt2_dir(layer) / "export", post_norm_dir / f"L{layer}.safetensors", "molt")
+    check_molt_reader(layer, settings, device, files_08b(settings, layer, post_norm_dir), "molt")
 
 
-def check_molt_reader(layer: int, settings: Settings, device: str, molt_dir: Path, post_norm: Path, save_as: str) -> None:
-    """R8.3 and R8.5 for one copy of a layer's MLP dictionary (also used for the frozen release folder, R8.7 c)"""
-    ref, info, held = _reference(settings, layer, None, molt_dir, post_norm)
-    molt = PublicMolt(str(molt_dir), device, post_norm=str(post_norm))
+def check_molt_reader(layer: int, settings: Settings, device: str, files: LayerFiles, save_as: str) -> None:
+    """R8.3 and R8.5 for one copy of a layer's MLP dictionary (also used for the frozen release folder, R8.7 c, and the 4B set, R10)"""
+    ref, info, held = _reference(settings, layer, files)
+    molt = PublicMolt(str(files.molt), device, post_norm=str(files.post_norm))
     assert (molt.layer, molt.n_transforms) == (layer, info["molt_n_transforms"])
     measured: dict = {"per_split": {}}
     sse = sst = n_active = 0.0
@@ -162,7 +180,7 @@ def check_molt_reader(layer: int, settings: Settings, device: str, molt_dir: Pat
     firing = torch.nonzero(g64.sum(0) > 0).reshape(-1).tolist()
     total = sum(molt.transform_write(x64, t) for t in firing) + molt.mu_out
     measured["max_rel_diff_sum_of_transform_writes_vs_forward"] = float((total - y64).abs().max() / y64.abs().max())
-    _save(layer, save_as, measured)
+    _save(files.measured, layer, save_as, measured)
     assert measured["max_rel_diff_sum_of_transform_writes_vs_forward"] <= 1.5e-6, measured
 
 

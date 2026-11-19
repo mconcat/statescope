@@ -62,6 +62,9 @@ class Settings:
     molt2_reexports: Path | None = None   # holds the two layer-9 exports in the later format (old_corpus_L9_pub128{,_post}/L9/export)
     snapshot3: Path = REPO / "legacy_snapshot3"   # frozen reference code of the line-count demonstration
     release2: Path | None = None    # the frozen second-design set as published: state/L<L>/, mlp/L<L>/, MANIFEST.json
+    molt4b_root: Path | None = None       # 4B set, MLP dictionaries: holds L<layer>/export/ for every layer but 16
+    molt4b_l16_root: Path | None = None   # 4B set: holds L16/export/ (layer 16 comes from a separate run)
+    release4b: Path | None = None   # the 4B set as published: state/L<L>/, mlp/L<L>/, MANIFEST.json
 
     def need_release_root(self) -> Path:
         if self.release_root is None or not (self.release_root / "layers").is_dir():
@@ -111,6 +114,26 @@ class Settings:
             pytest.fail(f"STATESCOPE_MOLT2_REEXPORTS is not set or has no {name}/ folder (see tests/local.env.example)", pytrace=False)
         return self.molt2_reexports / name / "L9" / "export"
 
+    def need_release4b(self) -> Path:
+        if self.release4b is None or not (self.release4b / "MANIFEST.json").is_file():
+            pytest.fail("STATESCOPE_RELEASE_4B is not set or has no MANIFEST.json (make the folder with devtools/stage_release2.py)", pytrace=False)
+        return self.release4b
+
+    def vocab4b_dir(self, layer: int) -> Path:
+        """4B set: export folder of a layer's state dictionary in the original results"""
+        return self.need_legacy_results() / "mlp_track" / "q4b" / "train3" / f"L{layer}" / "B1" / "vocab_B1s0" / "final"
+
+    def calib4b_dir(self, layer: int) -> Path:
+        """4B set: calibration folder of a layer (held-out activations)"""
+        return self.need_legacy_results() / "mlp_track" / "q4b" / "calib3" / f"calib_q4b_L{layer}"
+
+    def molt4b_dir(self, layer: int) -> Path:
+        """4B set: training export of a layer's MLP dictionary (with its own postnorm.safetensors)"""
+        root, name = (self.molt4b_l16_root, "STATESCOPE_4B_MOLT_L16_ROOT") if layer == 16 else (self.molt4b_root, "STATESCOPE_4B_MOLT_ROOT")
+        if root is None or not root.is_dir():
+            pytest.fail(f"{name} is not set or is not a folder (see tests/local.env.example)", pytrace=False)
+        return root / f"L{layer}" / "export"
+
     def layer_dir(self, layer: int, kind: str) -> Path:
         """release folder of one dictionary: kind is "vocab" or "molt" """
         return self.need_release_root() / "layers" / f"L{layer:02d}" / kind
@@ -142,6 +165,9 @@ def settings() -> Settings:
         molt2_reexports=_path_or_none("STATESCOPE_MOLT2_REEXPORTS"),
         snapshot3=_path_or_none("STATESCOPE_SNAPSHOT3") or REPO / "legacy_snapshot3",
         release2=_path_or_none("STATESCOPE_RELEASE2"),
+        molt4b_root=_path_or_none("STATESCOPE_4B_MOLT_ROOT"),
+        molt4b_l16_root=_path_or_none("STATESCOPE_4B_MOLT_L16_ROOT"),
+        release4b=_path_or_none("STATESCOPE_RELEASE_4B"),
     )
 
 

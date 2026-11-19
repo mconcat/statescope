@@ -15,7 +15,7 @@ from conftest import REPO, TEST_OUT, Settings
 from hashing import sha256_file
 from statescope.config import MODELS
 from statescope.reader import PublicMolt, write_post_norm
-from test_reader2 import check_molt_reader
+from test_reader2 import LayerFiles, check_molt_reader
 from test_repo_rules import FORBIDDEN
 
 pytestmark = [pytest.mark.legacy]
@@ -68,7 +68,8 @@ def test_layer_23(settings: Settings, device: str) -> None:
     with safe_open(str(rebuilt), framework="pt") as a, safe_open(str(folder / "postnorm.safetensors"), framework="pt") as b:
         assert torch.equal(a.get_tensor("w_eff"), b.get_tensor("w_eff"))                 # R8.4
         assert float(a.metadata()["eps"]) == float(b.metadata()["eps"])
-    check_molt_reader(23, settings, device, folder, folder / "postnorm.safetensors", "molt_release")   # R8.3, R8.5
+    files = LayerFiles(settings.calib2_dir(23), settings.vocab2_dir(23), folder, folder / "postnorm.safetensors")
+    check_molt_reader(23, settings, device, files, "molt_release")                                    # R8.3, R8.5
 
 
 def test_configs_hold_the_documented_training_facts(settings: Settings) -> None:
