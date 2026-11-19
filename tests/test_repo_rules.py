@@ -23,6 +23,8 @@ ALLOWED_EXCEPT = {
 # (file, matched text) pairs that are allowed, each for a stated reason
 ALLOWED_STRINGS = {
     ("src/statescope/earlier_design/release.py", "/home/"),      # the manifest builder's own check that no published JSON holds a home path
+    ("README.md", "mconcat"),                                     # the public address of the weights repository
+    ("release/qwen35-08b-v2/MODEL_CARD.md", "mconcat"),           # the public address of the code repository
 }
 FORBIDDEN = [r"/home/", r"/mnt/", r"\b10\.42\.\d", r"\b192\.168\.\d", r"\bprocessor\b", r"\bworkstation\b", r"\bmconcat\b"]
 READER = REPO / "src" / "statescope" / "reader.py"

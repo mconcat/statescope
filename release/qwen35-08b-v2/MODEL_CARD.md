@@ -11,7 +11,7 @@ This set contains separately trained state and MLP dictionaries for each of the 
 
 A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both sites. An MLP dictionary represents a layer's MLP operations, from its post-norm input to its raw output. The set contains no dictionary for the mixers.
 
-The statescope repository contains the reader, demonstration, tests and training code for an earlier design. The weights are separate from the code repository and are not published yet. The earlier design's training code did not train these weights.
+The statescope repository contains the reader, demonstration, tests and training code for an earlier design. The code repository is [mconcat/statescope](https://github.com/mconcat/statescope). The earlier design's training code did not train these weights.
 
 ## Files
 
@@ -36,6 +36,26 @@ python demo/verify_release.py --release <folder>
 ```
 
 The MLP export stores the trainer's state dict in `weights.safetensors` and its configuration in `config.yaml`. Its RMSNorm coefficients are separate from the state dict. They are stored in `postnorm.safetensors` as tensor `w_eff` and metadata `eps`.
+
+## Names inside the files
+
+The config files are published as the original project's trainers wrote them. Only the MLP dictionaries' safetensors header metadata was rewritten once. The internal names below are the same at all 24 layers and do not describe the dictionary's form.
+
+- `kind` in `state/L<L>/cfg.json` is `sasa_proper_segment`, the original project's internal name for its trainer module. The reader uses it only as a format tag and refuses a folder with a different value.
+- `name` is `segment_b4`, the original project's internal name for this configuration.
+- `trainer` is `train/layer_recipe.py`, a source-file path inside the original project.
+- `code_md5` records the paths and training-time md5 values of eight source files inside the original project. Those files are not published, so the values record provenance and cannot be checked against published sources.
+- `arm` is `B1s0`, the original project's label for the released run with seed 0.
+- `lam`, `lam_dr`, `lam_pc`, `lam_nest` and `n_dense` are options of the original trainer. All are 0 in the released dictionaries.
+- `data.class_path` in `mlp/L<L>/config.yaml` is `measure.public_molt.shard_data.ShardDataModule`, the original project's data module that fed captured activations to the trainer. That module is not published.
+- `source` in the header metadata of `mlp/L<L>/weights.safetensors` is `training.ckpt`, the trainer's checkpoint file name.
+- `keys` in that header says that the tensor names are the trainer's unchanged state-dict names.
+
+The state dictionaries used no penalty term and no dense block. Their form is given by `form` (`bsf`, the tied block-sparse dictionary described in this card), `gate` (`topk`) and `input` (`token_rms`).
+
+The file `mlp/L<L>/config.yaml` is the Lightning command line configuration of the training run, with sections `seed_everything`, `trainer`, `model`, `data` and `ckpt_path`. Class paths that start with `crosslayer_transcoder.` name classes of the public `crosslayer-transcoder` code and its training fork. The reader reads the `model` section for class paths, sizes and ranks, and `data.init_args.post_norm_stats`. It ignores the rest of this configuration.
+
+The files were left unchanged because they are the files this repository's tests ran on, and their sha256 values are the ones in `MANIFEST.json`.
 
 ## State dictionary
 
@@ -253,4 +273,8 @@ The task uses one model, one dictionary seed and fixed-width texts. It is an eas
 
 ## License and credits
 
-The code is licensed under MIT. The MLP dictionary's form and trainer come from the public `crosslayer-transcoder` code, which is MIT licensed, Copyright 2025 Georg Lange. The demonstration's texts come from `HuggingFaceFW/fineweb-edu` under ODC-By 1.0.
+The code is licensed under MIT in `LICENSE`. The dictionary weights in the Hugging Face repository are released under MIT, as stated by `license: mit` in this card's header. The base model `Qwen/Qwen3.5-0.8B` is licensed under the Apache License, Version 2.0. The base model is not part of this set and is not redistributed here.
+
+The file `mlp/L<L>/postnorm.safetensors` holds numbers copied from the base model. Its tensor `w_eff` has 1,024 numbers equal to 1 + the weight of that layer's `post_attention_layernorm`, the RMSNorm before the MLP, and its metadata holds the norm's `eps` (1e-06). Qwen3.5 stores this weight as an offset from 1. No other file of the set holds base-model parameters. All other tensors were trained on activations of the base model.
+
+The MLP dictionary's form and trainer come from the public `crosslayer-transcoder` code, which is MIT licensed, Copyright 2025 Georg Lange. The demonstration's texts come from `HuggingFaceFW/fineweb-edu` under ODC-By 1.0.

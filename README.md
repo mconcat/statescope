@@ -1,5 +1,25 @@
 # statescope
 
+statescope is a reader in one Python file and a set of dictionary weights for `Qwen/Qwen3.5-0.8B`, with one state dictionary for two residual stream sites and one MLP dictionary of 3,968 gated low-rank transforms at each of the 24 layers.
+
+**You can reproduce**
+
+- `python demo/verify_release.py --release <folder>` checks the 144 downloaded files against the manifest.
+- `python demo/line_count.py --release <folder>` re-runs the traced line-count chain for the model's line-break decision, from one layer-8 MLP transform through one state group, the model's layer-9 mixer and a second state group to two layer-9 MLP transforms.
+- `pytest -m "not release and not legacy"` runs the 61 tests that need no private data.
+
+**You cannot reproduce from the published files**
+
+- Training cannot be reproduced because the trainers for this set are not in the repository, and the included training code belongs to an earlier design that did not train these weights.
+- The per-layer reconstruction numbers and the spliced-in loss cannot be reproduced because the held-out activations and texts behind them are not published.
+
+**Limits**
+
+- The set covers one model, 0.8B, and one dictionary seed.
+- There are no dictionaries for the mixers, which are the GatedDeltaNet and attention sublayers.
+- The demonstration covers one easy task with dedicated MLP neurons and is not evidence that dictionary units are better than neurons.
+- Every comparison ran on one machine with one RTX 5090.
+
 ## What this is
 
 statescope contains a reader for per-layer dictionaries of `Qwen/Qwen3.5-0.8B`. The base model has 24 layers and width 1024. Its revision is `2fc06364715b967f1860aea9cf38778875588b17`. The set was frozen on 2026-11-18. Each layer has a state dictionary and an MLP dictionary that were trained separately.
@@ -8,7 +28,7 @@ A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site
 
 A group is a set of 4 directions in a state dictionary. A frame is the orthonormal basis of a group's 4-dimensional write subspace. A code gives a token's coordinates in that frame, multiplied by a per-group scale. A transform is a linear operation in an MLP dictionary with its own read and write matrices. Its write is what it adds to the MLP output. A gate controls a transform through a learned threshold on its pre-activation.
 
-The repository contains the reader, a demonstration, tests, and training code for an earlier design. That training code did not train these weights. The weights are separate from the code repository and are not published yet.
+The repository contains the reader, a demonstration, tests, and training code for an earlier design. That training code did not train these weights. The weights are in [mconcat/statescope-qwen3.5-0.8b](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b).
 
 ## Install
 
@@ -35,6 +55,14 @@ Without flash-linear-attention, transformers silently uses a slow GatedDeltaNet 
 The comparisons used Python 3.12.3, torch 2.11.0+cu128, transformers 5.20.2, flash-linear-attention 0.6.0 and safetensors 0.8.0.
 
 ## Reading the dictionaries
+
+This command downloads the weights with the Hugging Face command line tool:
+
+```sh
+hf download mconcat/statescope-qwen3.5-0.8b --local-dir <folder>
+```
+
+The downloaded `<folder>` is the folder passed to `--release <folder>` in `demo/verify_release.py` and `demo/line_count.py`.
 
 The separate weights folder has this layout. `<L>` is a layer index from 0 to 23 without padding.
 
@@ -85,6 +113,8 @@ FVU means fraction of variance unexplained. It is squared reconstruction error d
 This repository measured raw FVU with and without position 0. At layer 6, `resid_mid`, state FVU is 0.2524 with position 0 and 0.2184 without it. At layer 0, it is 0.0778 with position 0 and 0.0777 without it. For the MLP dictionary, the two differ by at most 0.014 at any layer.
 
 The original project also recorded the state trainer's own held-out FVU in `MANIFEST.json` as `heldout_fvu_own_units`. It uses the dictionary's per-token-RMS-normalised, site-standardised units. It includes position 0 on the first 4,096 tokens of each of four held-out splits. This repository's reader reproduces all 48 numbers within 6.9e-7. At early layers, this number is lower than the number on all tokens because the first 4,096 tokens are an easier subset, not because of position 0. At layer 0, `resid_mid`, it is 0.0533 on the subset against 0.0693 on all tokens in the same units, or 0.0777 in raw units. At layer 9, it is 0.2452 on the subset against 0.2438 on all tokens in the same units.
+
+The config files carry internal names of the original project. The most visible are `kind`, which is `sasa_proper_segment` in `state/L<L>/cfg.json`, and `data.class_path`, which is `measure.public_molt.shard_data.ShardDataModule` in `mlp/L<L>/config.yaml`. The model card's [Names inside the files](release/qwen35-08b-v2/MODEL_CARD.md#names-inside-the-files) section explains these fields and why the files were left unchanged.
 
 ## Demonstration: line counting
 
@@ -194,6 +224,7 @@ A missing required path fails its test. Nothing is skipped silently.
 - This repository measured reconstruction error on all held-out tokens, 257,122 per layer. The state dictionary's raw FVU agreed with the original project's table within 6.5e-8 at all 24 layers and both sites. The limit was 1e-4.
 - All 144 release files matched the manifest. MLP tensors for layers 0 to 22 were bit-identical to the training exports used by the reader tests. Layer 23 passed its own comparison with the public forward pass. No file header or config held a machine path.
 - Every demonstration share agreed within 0.0030 with the original harness's reference run and the original project's recorded numbers. There were 39 swaps x 3 cells x 3 halves = 351 comparisons. The original registration's tolerance was 0.005. The item file matched the original items exactly.
+- On 2026-11-19, the weights were downloaded from Hugging Face into an empty folder and the code was cloned from GitHub into an empty folder. `demo/verify_release.py` reported that all 144 files matched the manifest. `demo/line_count.py` on the downloaded weights wrote a result identical, byte for byte, to the tested run on the same machine, as checked with `devtools/compare_demo_runs.py`. This check used one machine with one RTX 5090. A second machine, a different GPU model and a fresh `pip install -e .` into a new environment were not checked.
 
 ## What is not shown
 
@@ -248,4 +279,8 @@ Every part was compared with the frozen original. Comparisons used Qwen3.5-0.8B,
 
 ## License and credits
 
-The code is licensed under MIT. The MLP dictionary's form and trainer come from the public `crosslayer-transcoder` code, branch MOLT, commit 376fabe. That code is MIT licensed, Copyright 2025 Georg Lange. The training fork changes no mechanism. The demonstration texts come from `HuggingFaceFW/fineweb-edu`, licensed under ODC-By 1.0.
+The code is licensed under MIT in `LICENSE`. The dictionary weights in the Hugging Face repository are released under MIT, as stated by the model card's `license: mit`. The base model `Qwen/Qwen3.5-0.8B` is licensed under the Apache License, Version 2.0. The base model is not part of this set and is not redistributed here.
+
+The file `mlp/L<L>/postnorm.safetensors` holds numbers copied from the base model. Its tensor `w_eff` has 1,024 numbers equal to 1 + the weight of that layer's `post_attention_layernorm`, the RMSNorm before the MLP, and its metadata holds the norm's `eps` (1e-06). Qwen3.5 stores this weight as an offset from 1. No other file of the set holds base-model parameters. All other tensors were trained on activations of the base model.
+
+The MLP dictionary's form and trainer come from the public `crosslayer-transcoder` code, branch MOLT, commit 376fabe. That code is MIT licensed, Copyright 2025 Georg Lange. The training fork changes no mechanism. The demonstration texts come from `HuggingFaceFW/fineweb-edu`, licensed under ODC-By 1.0.

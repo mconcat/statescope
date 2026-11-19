@@ -1,7 +1,9 @@
-"""Lay out the frozen 0.8B set (second design) in the folder structure it is published in, without copying a tensor.
+"""Lay out a set of the second design (the frozen 0.8B set, or the 4B set with --layers 32) in the folder structure it is published in,
+without copying a tensor.
 
     <dest>/MANIFEST.json
     <dest>/README.md                                                           the model card (a copy), if --card is given
+    <dest>/<name>                                                              a copy of every file given with --extra
     <dest>/state/L<L>/{cfg.json, weights.safetensors, usage.safetensors}       state dictionary of layer L (two sites: resid_mid.L, resid_post.L)
     <dest>/mlp/L<L>/{config.yaml, weights.safetensors, postnorm.safetensors}   MLP dictionary of layer L
 
@@ -9,7 +11,7 @@ Every file under state/ and mlp/ is a symbolic link to the original (about 29 GB
 file, the sha256 of the bytes behind the link, and the numbers the original project recorded at training time. Both sources are only read.
 
     python devtools/stage_release2.py --state-root <.../q08c/train1> --mlp-root <.../release_08b_v1> --dest release_stage2 \
-        [--card release/qwen35-08b-v2/MODEL_CARD.md]
+        [--layers 24] [--card release/qwen35-08b-v2/MODEL_CARD.md] [--extra <file> ...]
 """
 from __future__ import annotations
 
@@ -19,7 +21,6 @@ import json
 import shutil
 from pathlib import Path
 
-N_LAYERS = 24
 STATE_FILES = ("cfg.json", "weights.safetensors", "usage.safetensors")
 MLP_FILES = ("config.yaml", "weights.safetensors", "postnorm.safetensors")
 ARM = "B1s0"                                  # the original's name of the released state-dictionary run
@@ -45,14 +46,16 @@ def main() -> None:
     ap.add_argument("--state-root", required=True, type=Path, help="holds L<L>/B1/vocab_B1s0/final and L<L>/B1/layer_recipe_done.json")
     ap.add_argument("--mlp-root", required=True, type=Path, help="the frozen folder of the MLP dictionaries: L<L>/ and MANIFEST.json")
     ap.add_argument("--dest", required=True, type=Path, help="folder to create (must not exist)")
+    ap.add_argument("--layers", type=int, default=24, help="number of layers of the model (24 for 0.8B, 32 for 4B)")
     ap.add_argument("--card", type=Path, default=None, help="model card to copy into the folder as README.md")
+    ap.add_argument("--extra", type=Path, nargs="*", default=[], help="files to copy into the folder under their own names")
     args = ap.parse_args()
     if args.dest.exists():
         raise FileExistsError(f"{args.dest} exists; stage into a new folder")
     mlp_manifest = json.loads((args.mlp_root / "MANIFEST.json").read_text())
 
     layers: dict[str, dict] = {}
-    for L in range(N_LAYERS):
+    for L in range(args.layers):
         run = args.state_root / f"L{L}" / "B1"
         src_state, src_mlp = run / f"vocab_{ARM}" / "final", args.mlp_root / f"L{L}"
         for name in STATE_FILES:
@@ -85,6 +88,7 @@ def main() -> None:
     manifest = {
         "model": mlp_manifest["model"],
         "frozen": mlp_manifest["frozen"],
+        **({"note_frozen": mlp_manifest["note_frozen"]} if "note_frozen" in mlp_manifest else {}),
         "notes": {
             "state.heldout_fvu_own_units": "the trainer's number: per-token-RMS-normalised, site-standardised units; first 4,096 tokens of each of "
                                            "four held-out splits, position 0 of a sequence included (training dropped position 0)",
@@ -97,7 +101,9 @@ def main() -> None:
     (args.dest / "MANIFEST.json").write_text(json.dumps(manifest, indent=1) + "\n")
     if args.card is not None:
         shutil.copyfile(args.card, args.dest / "README.md")
-    print(f"staged {N_LAYERS} layers into {args.dest}")
+    for extra in args.extra:
+        shutil.copyfile(extra, args.dest / extra.name)
+    print(f"staged {args.layers} layers into {args.dest}")
 
 
 if __name__ == "__main__":
