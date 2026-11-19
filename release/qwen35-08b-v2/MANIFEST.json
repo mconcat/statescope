@@ -1,0 +1,971 @@
+{
+ "model": "Qwen/Qwen3.5-0.8B",
+ "frozen": "2026-11-18",
+ "notes": {
+  "state.heldout_fvu_own_units": "the trainer's number: per-token-RMS-normalised, site-standardised units; first 4,096 tokens of each of four held-out splits, position 0 of a sequence included (training dropped position 0)",
+  "mlp.heldout_*": "measured by the original project on a held-out shard of the training capture that was deleted afterwards; position 0 included (training included it); these numbers cannot be recomputed from the published files",
+  "mlp.tensor_bytes_sha256": "sha256 of the tensor bytes only (the safetensors headers' metadata was rewritten once after training)"
+ },
+ "layers": {
+  "0": {
+   "state": {
+    "sites": [
+     "resid_mid.0",
+     "resid_post.0"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.0": 0.05330243076960452,
+     "resid_post.0": 0.05676107786660623
+    },
+    "sha256": {
+     "cfg.json": "6cfb10958df6460cdc0b1362e3a10590170212a51e33f83a760bd57d5bfbf063",
+     "weights.safetensors": "ff71678d9fe84b785a0374e85a08eaf19fa42ee8b8e47c7e757a39e9390e5049",
+     "usage.safetensors": "e23eedcd6859db6f3fbec72c5905842a0eab46249f1dabfed5dc5bfce991a786"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3955,
+    "heldout_fvu": 0.07318598783265987,
+    "heldout_l0": 18.988831560476072,
+    "heldout_active_rank": 525.0155235697102,
+    "sha256": {
+     "config.yaml": "5866d476017aa878ac5b5e8232d1bc327044f016f52ff4e6580a7b90c4210952",
+     "weights.safetensors": "9443e9166d52f7853428119247e4f99b28839712580ed5ee748322032ad2d3d3",
+     "postnorm.safetensors": "c2f2065ef4874856cffb22257d34a5c70291fa427e5a176ee6bd0cdfcec03c87"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "8ab79dfe1e5af405780186b0ae42f5671f2fa42f03b2a3739e8516a69a45f670",
+     "postnorm.safetensors": "919a845f171b32d3d04054dd4511e1b44d88e7bcf2b68e3bd5f5ea6e4fc2dd62"
+    }
+   }
+  },
+  "1": {
+   "state": {
+    "sites": [
+     "resid_mid.1",
+     "resid_post.1"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.1": 0.0917459166058864,
+     "resid_post.1": 0.1006476853942482
+    },
+    "sha256": {
+     "cfg.json": "d6ac90b05432a036ab172d175f2858c7392d5739cb5604f8bd1c8ff2d719872d",
+     "weights.safetensors": "baa82a2ce56f2d9ef8f935ef978515c210b7044d918eaf997b25c793dc5aebfd",
+     "usage.safetensors": "2b5bc38efed8953a22831a7be6094db8cdf6af1ce3249de7df687762452b5129"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3936,
+    "heldout_fvu": 0.14466205664494183,
+    "heldout_l0": 11.241451560401241,
+    "heldout_active_rank": 446.18180049462904,
+    "sha256": {
+     "config.yaml": "e60722183e6367fb5b1e4bdd994622be0d8411a19133ffe6c30427615fe4364a",
+     "weights.safetensors": "aeeb5d1a1667e65ea833c5902581767fb1dceea53b47217f24dac09c1d84b39c",
+     "postnorm.safetensors": "3bcc0de60db9996878c2f55c2f6a387b3c448d972ee2efea201d8f81d58cbb99"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "a7b7a04226d02312f66ca055f8d6b85efa373d32591dcfa90d4272e622c6f996",
+     "postnorm.safetensors": "ba964f6cf52283d7c387f271d70d11cc97ff3ac0adfe92c898b0b00ba7231686"
+    }
+   }
+  },
+  "2": {
+   "state": {
+    "sites": [
+     "resid_mid.2",
+     "resid_post.2"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.2": 0.14328195274212388,
+     "resid_post.2": 0.13018150341580131
+    },
+    "sha256": {
+     "cfg.json": "b395eed926f329ffb4cfb6e2f2f86ba35f661309b1607ad79a6fa70a143855ef",
+     "weights.safetensors": "74ac08d1ab5bb3d5a7915c2cb23fd22aa228aaa7785f3754400e9e7b788c5f24",
+     "usage.safetensors": "b1a0566759d84898c46ded88dbdbfa3fa63a74810987411e2c0c79eb969a8e7d"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3901,
+    "heldout_fvu": 0.1357869695606493,
+    "heldout_l0": 9.920750848389837,
+    "heldout_active_rank": 640.3678363907794,
+    "sha256": {
+     "config.yaml": "b86504fd3066ae60faa204bba87ae9c9903bcceaf2170480131afa992afc80e0",
+     "weights.safetensors": "5cd3be75e0f600d3221076ef21ff296fe611a9213721bd1d8f60304434c9233b",
+     "postnorm.safetensors": "ec407a6fcb9fb2fe6a319b3e218eabd633c6199986bdad4fb660e8aac50d23a4"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "ee9825a8e5f32a018c8591a9794a13b771cda904c9d16ebb9de737f4ab014564",
+     "postnorm.safetensors": "cfdc8a7549b0f859f7cbd6752060b5ba0b802d34ece0568525159552061d83c6"
+    }
+   }
+  },
+  "3": {
+   "state": {
+    "sites": [
+     "resid_mid.3",
+     "resid_post.3"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.3": 0.15874630111368285,
+     "resid_post.3": 0.15293873085812407
+    },
+    "sha256": {
+     "cfg.json": "711ec6aa1bd821e8a90b74f1206baf6ad57cc4554b06b0c6e9c2272e25ceeeea",
+     "weights.safetensors": "bca4dcd8620948771f3a4a0c5468d4f3f8e673a2bcec4e895f6daa8c53f2b909",
+     "usage.safetensors": "6e90d945b78cf9728e61839addc8884e0125fe076f9500da749aadb03354111c"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3838,
+    "heldout_fvu": 0.1598915615315049,
+    "heldout_l0": 10.280471880600588,
+    "heldout_active_rank": 669.692469441129,
+    "sha256": {
+     "config.yaml": "f142464f88eb0d9f7b43f608cefcf22116b9879df8d56f62a569f84ff603d9ca",
+     "weights.safetensors": "1395c74812ea17c5276c4e99d5ef66e6125c78e4b82f037499a816efc5f8e4b0",
+     "postnorm.safetensors": "4525494b926a5d0fcf920cc18d37c71a4876cf78983306e644c7798945390373"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "2620f90b872fc12fa8da10402fc36e75f59f3ec6d5eea97b0b55aaa0f891143c",
+     "postnorm.safetensors": "469bf754b0fd86e2417fd0a2565987e5f4e201394356b88fbcd28061f97aa735"
+    }
+   }
+  },
+  "4": {
+   "state": {
+    "sites": [
+     "resid_mid.4",
+     "resid_post.4"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.4": 0.17909596324478314,
+     "resid_post.4": 0.1597316821755622
+    },
+    "sha256": {
+     "cfg.json": "d77eba0eec518bfa251aa9c768ed048124ed2129fbf3276d34cf2d6c394460f7",
+     "weights.safetensors": "db5235acfec06023fa897215635fe75d7da1c9619a3e22ad1552417f323851e1",
+     "usage.safetensors": "74e9a0d08e7fa325d1db1ba3ee530100b12a009ec71578d7594a250a64858308"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3793,
+    "heldout_fvu": 0.15258581034172977,
+    "heldout_l0": 10.193369276876279,
+    "heldout_active_rank": 793.2208731961193,
+    "sha256": {
+     "config.yaml": "8a600797eebb9b0d0fb756e11c526a8684af12ede0a477033a0d855879d0f1e7",
+     "weights.safetensors": "b2e5b0d4c20cb78ebad6f85e50904de62d49fb5610bbbbd04f8de13529b3b663",
+     "postnorm.safetensors": "8713d26855e36ef5573d7976589199c65649441a3380d83c50fc5170c93b41ed"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "9b6ae7ac9d64ab323ddd5feea9da3b7034deced55e29e3d8f76a1f9c865602d2",
+     "postnorm.safetensors": "ab16042a4afe4cea3a8167c3929802def39ea53f742e1a45f253aa06de4a4183"
+    }
+   }
+  },
+  "5": {
+   "state": {
+    "sites": [
+     "resid_mid.5",
+     "resid_post.5"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.5": 0.18880445648583305,
+     "resid_post.5": 0.17456938382804418
+    },
+    "sha256": {
+     "cfg.json": "7f3de394b4155e00680bdbeb4766b7b23de4ba9d0359bdd74b71c06118e66161",
+     "weights.safetensors": "4652e21af08cb68ca956674363938bd606efcfc30260be65d64a2e62b7b01792",
+     "usage.safetensors": "9fce205074e0eb40a93a890a35647ba68882d3a62e1704dbb8fc436196f2d8e9"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3690,
+    "heldout_fvu": 0.1735954631298862,
+    "heldout_l0": 9.8871145765908,
+    "heldout_active_rank": 794.2585316027553,
+    "sha256": {
+     "config.yaml": "1d9fc18dcfbfe4430ebb6eeab3755db81bf6773b01d3738f3ad92cb8da8b2787",
+     "weights.safetensors": "e90e3d3657d0d7ce468324f42c8a3974048abaa0a3ef2d83f3baef4778b7cb02",
+     "postnorm.safetensors": "5d98c24eb2e37ef99536da5a87add0e00aad2af0fdb8ed290f6ab161778d83ee"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "418a236102e14ce4d582d364ba6a7b1b09b3afc3cce0d297246157549167f07a",
+     "postnorm.safetensors": "b353044633b20b36ad351d26e5e6bcd3596c093e2993cab0a68c96efeb403c79"
+    }
+   }
+  },
+  "6": {
+   "state": {
+    "sites": [
+     "resid_mid.6",
+     "resid_post.6"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.6": 0.2147005930844737,
+     "resid_post.6": 0.20838187345344433
+    },
+    "sha256": {
+     "cfg.json": "e83a5f4d49bf1774d32ec3dd1e95e31e8da7944307daeb74718ed21cc657a716",
+     "weights.safetensors": "13d908abd4a246929582cf684d4243f453f025040cb2213d67e3a62698542a14",
+     "usage.safetensors": "c76fef71820a5afc077a65838893f633054b6a4c16267265fd5216218a34e16e"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3167,
+    "heldout_fvu": 0.18922601761694735,
+    "heldout_l0": 9.098858462010469,
+    "heldout_active_rank": 772.4286136543059,
+    "sha256": {
+     "config.yaml": "d9fed18be8e27e7a88ea3e9f8e16246396d31b422e88d093805d9ed50374a40c",
+     "weights.safetensors": "bd5935a67454e489065a634aa64bfbb06d859434a019ab85199638d679123957",
+     "postnorm.safetensors": "6f293cd3c65072494648144afd2b5c2aa22083fd3e584e892d843bc4e3a40a86"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "b7f3d1517c4913ff9a05e6e1d6f1e6dbae40a57ef75d8679044a604ebc83faae",
+     "postnorm.safetensors": "746e73826fdb8584b617317c02930daeb6556938f9e245b37302e6b388979e94"
+    }
+   }
+  },
+  "7": {
+   "state": {
+    "sites": [
+     "resid_mid.7",
+     "resid_post.7"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.7": 0.2392982709119843,
+     "resid_post.7": 0.21878760190544427
+    },
+    "sha256": {
+     "cfg.json": "c89b1e9b3709c702a22a484410ec25e0a7404972f354c14adeb23dd0791a25c4",
+     "weights.safetensors": "599378950f11291a2cb31d04711feaa155cd963668f9a4c9470090ddd64f318f",
+     "usage.safetensors": "ec44f60f2eef87d66c6df06339109e7410fb7a08fb682c8fc86bd2be86c2b7fd"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2720,
+    "heldout_fvu": 0.18509116588857258,
+    "heldout_l0": 9.161128592327637,
+    "heldout_active_rank": 862.6971426005815,
+    "sha256": {
+     "config.yaml": "1630776a4d55a3f7e2696c9eaf2fad3f52c9e11a10e345a0b612e2616b56cefd",
+     "weights.safetensors": "b5a5e9fb8fc5b14ff0566b5cf732635124f2ca4ad2830aae9b5e9105ab6091a7",
+     "postnorm.safetensors": "540d364f83eb512080b30f0a8b569486bbe51cdc53e014bab28332081a6ee68c"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "ddae39613ea574990e8fa510338abcc49bbdfd683f12edd1f997986629bd0840",
+     "postnorm.safetensors": "eb91d9cd48de23885cf0f19f1e183d30f3381095a1b2356cc6445c978dac1407"
+    }
+   }
+  },
+  "8": {
+   "state": {
+    "sites": [
+     "resid_mid.8",
+     "resid_post.8"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.8": 0.23590416565431646,
+     "resid_post.8": 0.2220842645685921
+    },
+    "sha256": {
+     "cfg.json": "6e670113909862e0d98a1d296698d0e619a0d375fe6b5e54404c7a7aee260bf6",
+     "weights.safetensors": "a07312288dfb2f01e37902cc3bddee9cb2b5cbdff1911b472e743a262729ef82",
+     "usage.safetensors": "58ac14c3fff6bc9e5fae4dde913d8ef7de776b983ba45a5fe207bba79cb0a501"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2396,
+    "heldout_fvu": 0.20660527206089288,
+    "heldout_l0": 9.127226672553325,
+    "heldout_active_rank": 879.0491748075923,
+    "sha256": {
+     "config.yaml": "c80f021722601246d88e73155bd27f44184a8a114b515b9f7a859f9d6d85d765",
+     "weights.safetensors": "456b8cd82de2142f264dd67fa8ac3726df8f7c0171bb544c2e9f7d535ddf6047",
+     "postnorm.safetensors": "3904b2e0d2f9ab781067a9d70db2d4f4fb90664af0c498fc52206e2fe5993ebf"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "23333e82209aea971d33606e65eb014bc159035c7e81871dd2e4c9eeb4d9cae3",
+     "postnorm.safetensors": "cde5530ccf67325bd08236a85978749168c1de609a1174a5f489d94725bd011f"
+    }
+   }
+  },
+  "9": {
+   "state": {
+    "sites": [
+     "resid_mid.9",
+     "resid_post.9"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.9": 0.2452029283461024,
+     "resid_post.9": 0.23307437702495884
+    },
+    "sha256": {
+     "cfg.json": "3f6fcc39008fb4b620601209bfee75a7db76f7d3448c85f9941a8327854b609e",
+     "weights.safetensors": "6d3c8e83b51a605c3a0ee4558a139b5d4beecfe8684e9302ef87453be6f403f5",
+     "usage.safetensors": "bffb441f5b4d55ef4e9a6228eb3fda144006a09e69f4cc512041f3ed2ae50608"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2035,
+    "heldout_fvu": 0.21526469942119286,
+    "heldout_l0": 8.851188494075302,
+    "heldout_active_rank": 864.3803181040967,
+    "sha256": {
+     "config.yaml": "6765fbe1df0f8689dfcf676ac8f8123377ddc68f2cc4a2fe312216eeeb8f908e",
+     "weights.safetensors": "c1aa96da31079cb3161c56ce02fde3a58c22ef478e44ebdf88daaf1be530a3c4",
+     "postnorm.safetensors": "e065a67502b333cf0d0e66f1d75a1daa80a4cf917800b2cc69adfa41e5567ca0"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "2148e3518530c202bef3352303cc48f192909c83b877fe72c82a23221cc030ed",
+     "postnorm.safetensors": "4f08983eceede631527dc3334abcd53605753345f519c82f348cc76d7719cffc"
+    }
+   }
+  },
+  "10": {
+   "state": {
+    "sites": [
+     "resid_mid.10",
+     "resid_post.10"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.10": 0.2539775646818849,
+     "resid_post.10": 0.23669622058288584
+    },
+    "sha256": {
+     "cfg.json": "21233bbbfcbe2b5a104faff33a0511ec0253a0f9c2b46cc6c3ab6c252916082d",
+     "weights.safetensors": "fa86b60ab2b24e6ce9813d55de97430106459cbbcb160978bee71476c3b88951",
+     "usage.safetensors": "244ae9170a6e1adb09cb94d29c7e20128bf2d839ae203586e34ef765b7f7a38a"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 1862,
+    "heldout_fvu": 0.1828448450575236,
+    "heldout_l0": 8.585727594838199,
+    "heldout_active_rank": 874.2180633140146,
+    "sha256": {
+     "config.yaml": "c7fb85dd0850ebb421288da3923fe8b198bd871b3ac1a5fa4b1eda961dbee427",
+     "weights.safetensors": "4e4d9b8f683347fe4d4102f538e2c85f778d4d2a1a3dac045004f0be65e838f0",
+     "postnorm.safetensors": "66b439ecba0a5023f87c0eb5a2fafb004a57f7d20c203220a055321db158ab50"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "e9324aaaa9fbd1c4025ccd32b4480c3db43b39095c66288f95d52c47d19dd527",
+     "postnorm.safetensors": "91127421693a1f177600cbf41c891167ebbeff30e10f72b1bbb6e791eaa28177"
+    }
+   }
+  },
+  "11": {
+   "state": {
+    "sites": [
+     "resid_mid.11",
+     "resid_post.11"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.11": 0.27133620053237106,
+     "resid_post.11": 0.25093842061724564
+    },
+    "sha256": {
+     "cfg.json": "25b798abbc7ae6ff295d8fe2599a92d48d568e83ea591739a5dbdf7bb411ffc6",
+     "weights.safetensors": "e03a0326fe18c15325c56d0acb905e0337f86d19fd167c1721a651e3b36e9cc3",
+     "usage.safetensors": "d2abe6ffcbf2e1618f8002767eaae1ebb6113724825580285bd79330380c3957"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 1950,
+    "heldout_fvu": 0.17625201098220078,
+    "heldout_l0": 8.325575913585837,
+    "heldout_active_rank": 812.9068997384676,
+    "sha256": {
+     "config.yaml": "ea03fd390b540ce46e0e24d00d5383ddba27738da608dd13a5063d2b381b2147",
+     "weights.safetensors": "8d7efa91c80fd82ade616f4bd9463a4c87bf73252c724d56eaf904cc0eba05e9",
+     "postnorm.safetensors": "eebff14cff1f01c0067fd68299bc6e91c0ab7526dd23158ce517e79d506b503c"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "c496f34342dcc31e948526834b1cb5e72b54d9b2306e78697a8c0f7a2fd33995",
+     "postnorm.safetensors": "e112fc9f8cfa1003b2172d957f5f412e1f1e84aa1440e5a64e6ceda084654064"
+    }
+   }
+  },
+  "12": {
+   "state": {
+    "sites": [
+     "resid_mid.12",
+     "resid_post.12"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.12": 0.26482444320961424,
+     "resid_post.12": 0.24528217727013066
+    },
+    "sha256": {
+     "cfg.json": "49ed8017952f7ed5ebfb4e5db470375d3e84a92dfb7b31ac537dd712da53661f",
+     "weights.safetensors": "2d35a416bf99a0347ead164321eff0a9c9f019f959a3d16d69a9a03a2bbf1e4c",
+     "usage.safetensors": "25d14ba74d5050b90d45c25fa93b36f96a2427089e74a34a2fc9b87075aa2e05"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2290,
+    "heldout_fvu": 0.1856633922043858,
+    "heldout_l0": 8.286978385234463,
+    "heldout_active_rank": 762.2492825633907,
+    "sha256": {
+     "config.yaml": "53e2ab110bb689092f94864d992f9fb78f27a9dfa28b301223ffe7a82e23cd3b",
+     "weights.safetensors": "22e4da9a9e985268a9f8e8c4716393a2ed3897ac18922d0c240021089be47801",
+     "postnorm.safetensors": "02543913bf07883edd305c801f85a0fcfdc6ff046234363bf26826dc421a649d"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "bcb787eb093c6c47df19fde11689988ff3b8e94ffa55e6fd69e262f169f57407",
+     "postnorm.safetensors": "9c3ea0186a7f38cd8760172b8da4d172f927beef70a021de42104503a0f44e5d"
+    }
+   }
+  },
+  "13": {
+   "state": {
+    "sites": [
+     "resid_mid.13",
+     "resid_post.13"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.13": 0.2593752076482421,
+     "resid_post.13": 0.24498599185890027
+    },
+    "sha256": {
+     "cfg.json": "50468ba3d6c35e8f56ab479c07d4eac1228a9a85935b45e4502b5dc23e803efc",
+     "weights.safetensors": "a4b65c8b226b9bc047b7580ed127b22e30b12d4c209ff61d96c003e0fb8df3c6",
+     "usage.safetensors": "53f1a71dccb9b7a2789896d1f487069731ffcb8286bbff9302e6899f4d227a09"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2240,
+    "heldout_fvu": 0.17683263258437404,
+    "heldout_l0": 8.509108732335346,
+    "heldout_active_rank": 723.7925251897886,
+    "sha256": {
+     "config.yaml": "ffc645f359002bf259ecb840c2bf9e460c14972b3ed3865239736dce00090075",
+     "weights.safetensors": "4f6cb1b9e32952605427bcea29998f1432146666fbf511f92efc4f6e433bff4f",
+     "postnorm.safetensors": "c3b13f319e2e903f48783f3e1cffa761b67fec1a8a478a431e6197ee99ae50fe"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "ceeb212b672139c2c429e0669bec3d0d9466b2212efd260d5d23a580b4069ef0",
+     "postnorm.safetensors": "7683131eb58b79d5312ea113d268b1f9e5ba70be63372cb11b8a0bbcad7f20b2"
+    }
+   }
+  },
+  "14": {
+   "state": {
+    "sites": [
+     "resid_mid.14",
+     "resid_post.14"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.14": 0.2606275438669336,
+     "resid_post.14": 0.2325176423943906
+    },
+    "sha256": {
+     "cfg.json": "af158feac67969384d28305d1e5de552597f568bc3422540775650b4773219ae",
+     "weights.safetensors": "6acf8b023f2421698595581759d144e403ac6e612c4f7fb34418741c37188d9b",
+     "usage.safetensors": "1772fbf812e86b0eac609cc0af732f84b324052ddf91daddfb6b98cc511e99f9"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 1935,
+    "heldout_fvu": 0.12163028356047549,
+    "heldout_l0": 7.467517987361143,
+    "heldout_active_rank": 632.1039544133108,
+    "sha256": {
+     "config.yaml": "37eca015b5d8d8d1e2e930f911774386f25b8f5e9604f9be4b03a88c8f55deca",
+     "weights.safetensors": "8864a7fb97c362fa4f870f0877aa28b1e5f937df6a649e68e4f5f6bbc3d58c00",
+     "postnorm.safetensors": "450914aca0a00a45bf5887095509f579bc53b950d7cd19aba990c95ce02cd82f"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "52a72f6dbcba02c3df3a8dce45405c8675d002aca7d9dcaa14fa52178fc8ff58",
+     "postnorm.safetensors": "035cdf2db03cda96d1f0c2e9478f39ddcbdc43a80298a332682f7297e1adaac5"
+    }
+   }
+  },
+  "15": {
+   "state": {
+    "sites": [
+     "resid_mid.15",
+     "resid_post.15"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.15": 0.25861642353873115,
+     "resid_post.15": 0.2283844720850722
+    },
+    "sha256": {
+     "cfg.json": "fb49f975bca29584bc483b64286359a754e2d017282d8f49d2e68a88ab1d6d8f",
+     "weights.safetensors": "2b2c4ccf4b3049c0bce360701292eac2ee46ae5f6e4a271c8e63308311935cb6",
+     "usage.safetensors": "1ecb53ff7add179956aeaaabf826fa5c1997953a4e00c865a76911033ddabd10"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2880,
+    "heldout_fvu": 0.12001815143729991,
+    "heldout_l0": 8.189025371252399,
+    "heldout_active_rank": 706.9174283779384,
+    "sha256": {
+     "config.yaml": "c146bb2bead8f4354baa7f82f005b189fa771e859ace8f15c84f152bd42aa4bc",
+     "weights.safetensors": "05be007533c16ed3862509a926369701c28985bcb4a0dc771bb4feb6e58b975e",
+     "postnorm.safetensors": "0936ad08cd84a14ea47eb763bb771352a48938d54f72b27bf34cf22aea10796d"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "d7c1a20bbc09613a86ff8736d373de06d9cd8c5d70cb79a063545002d29eb009",
+     "postnorm.safetensors": "238e3a075ac7771d35804835e05b9a21c0a9e4cc5fe99ba26b38a6898f9063e0"
+    }
+   }
+  },
+  "16": {
+   "state": {
+    "sites": [
+     "resid_mid.16",
+     "resid_post.16"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.16": 0.2313831122823395,
+     "resid_post.16": 0.21904945752972416
+    },
+    "sha256": {
+     "cfg.json": "e6f9c5ca0e321f487f1a7759059dbe8a0fb39a2096caef42910f49174bc744b9",
+     "weights.safetensors": "72680ee8ac78b9f2dd2ad581bca779b060fa9fae0a838c1cd911651bb95665a6",
+     "usage.safetensors": "48d37baf41fb7549116b12429b8d5e524d3e50a1e490db2e8f40654e9e4b7925"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3350,
+    "heldout_fvu": 0.14692483216439892,
+    "heldout_l0": 8.309730573088737,
+    "heldout_active_rank": 639.1679157110199,
+    "sha256": {
+     "config.yaml": "8d23d6d54ebbe06e2ce3292dfd7f6a31dd681c027325703889eaddde1448b58e",
+     "weights.safetensors": "e575a1f7067e46acc67c3d39dfbefb83d02a1901d3537b02f1dcd3c588dc99db",
+     "postnorm.safetensors": "9b8112d44e66332923b238c3c864f1a7b54ef290faa5f93488251d1af576f2d6"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "6ad8f6b5877fca617a192ff08979eb056a0b95bc5b166ed13486b7387bb8721e",
+     "postnorm.safetensors": "159ff9c34431c801ab18ae34c679c585ee89a3cc303ac90b947421a848f105bc"
+    }
+   }
+  },
+  "17": {
+   "state": {
+    "sites": [
+     "resid_mid.17",
+     "resid_post.17"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.17": 0.21847236815292556,
+     "resid_post.17": 0.21393295490316766
+    },
+    "sha256": {
+     "cfg.json": "ee567a35e960fe5894f8eb20c0a0c6fe645b8cb3c04ca148c4c68f82f71072a0",
+     "weights.safetensors": "fc7dc8eb7dec2f2e33d09634a3f0e4062b5d9fb056e5aadbbe40c20d868865d2",
+     "usage.safetensors": "ed6bbaaaacf54d8a779b9dca9f5572d0bd06bd8e2440430eb8260b1279db68d1"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3506,
+    "heldout_fvu": 0.1555315999291199,
+    "heldout_l0": 8.362239075694706,
+    "heldout_active_rank": 640.8308271379985,
+    "sha256": {
+     "config.yaml": "1990ec40f3458fadd4038582385f087a6b7f38d46e82108be88dc8a0c61ed861",
+     "weights.safetensors": "0eadc4f843fe2654099e8e79ddf8863bd364e5250fc4ebd51d0f40d55d5abc2f",
+     "postnorm.safetensors": "594e1c847508c729fd6fef1f18a9b7b48b5a08c316aa0daedf401df8a8794e1a"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "d84b4388ba6ee3cbcd3dab47a00b7bed9c9082d7cac31d771dafc50152b07fd5",
+     "postnorm.safetensors": "69c95a51de353cf11ed1138545e5411f5bc469fd2bcf56f3ccd43ed2b63b5402"
+    }
+   }
+  },
+  "18": {
+   "state": {
+    "sites": [
+     "resid_mid.18",
+     "resid_post.18"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.18": 0.21513990447811185,
+     "resid_post.18": 0.2058994675061084
+    },
+    "sha256": {
+     "cfg.json": "262eb357219f79b3c6171516347185e578e140175416966d2216ec929f7a6ee4",
+     "weights.safetensors": "eba409dfe992f9ed470348582e060cedee2e223a44898c7ba51d5521807a9d65",
+     "usage.safetensors": "489e7b0df997ff109717b2ba16a70bdc53993b6f9e1ca2bb92ae716d133f436d"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3462,
+    "heldout_fvu": 0.13044486299210659,
+    "heldout_l0": 7.852797348010072,
+    "heldout_active_rank": 595.5933266235394,
+    "sha256": {
+     "config.yaml": "835252b46e33d736bd5c103915d05b7dd635bc9eba62a770736f2c9ff21094eb",
+     "weights.safetensors": "d1322db3cd6f176ecfbeb61fd5ac747d9ea593cc16c32abe65387a8721a0799d",
+     "postnorm.safetensors": "b900b48b17a0d7dc778bc508112ae7cb69722aae694c1dbceb3bf4637fabf3aa"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "68c3f2bcd2ba197ba306ca076ea352ea477a6d9a5eec1303834ec0426293a983",
+     "postnorm.safetensors": "0f6347ef32ed277346a8d9ae1c1eb22be97b99e7bb03e1ae34415d61d6c6237b"
+    }
+   }
+  },
+  "19": {
+   "state": {
+    "sites": [
+     "resid_mid.19",
+     "resid_post.19"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.19": 0.22943589434876524,
+     "resid_post.19": 0.22675386242655107
+    },
+    "sha256": {
+     "cfg.json": "d940ebf3e5e12a2b9afb6a4c0f85eb520a649eec0fc5c13b8a36f51d0b795187",
+     "weights.safetensors": "efdf4ee95b8722dc08d61448dba46e5ea0dc5ab33f0a5bb23bf538a45ad1e0df",
+     "usage.safetensors": "ccd9fbb8d9cb15d26666706be76728044e79972b1c29aff5b37fee11d84f5325"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3486,
+    "heldout_fvu": 0.1369990164370553,
+    "heldout_l0": 8.185373646972549,
+    "heldout_active_rank": 672.3778038021335,
+    "sha256": {
+     "config.yaml": "8313b26243fdd09536c2647101a9a87756ac7aef8f71d05433133e16937cae88",
+     "weights.safetensors": "197ed9196c5356959a0932bea38c869af6d884ea9c34c8d5b68527a9e0f70838",
+     "postnorm.safetensors": "9595bb88c66876e1f74861eddf22b03b758934c2f595742901e222f0226d46af"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "23704b9e1b4b6dd43ab6545ad3001b076b49a99f4ef5167922bda55193c0b11c",
+     "postnorm.safetensors": "56647508c9d9ed948cfab5510b1baaac22b165c11af9c49b436c06c02068703c"
+    }
+   }
+  },
+  "20": {
+   "state": {
+    "sites": [
+     "resid_mid.20",
+     "resid_post.20"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.20": 0.22207858482299597,
+     "resid_post.20": 0.22516023547212688
+    },
+    "sha256": {
+     "cfg.json": "15da89e76aefe665fe07a65cc7e121d6f85480f71a3fa17d923f09af98d1a3fa",
+     "weights.safetensors": "bf8c2b51376e2d7a2c5887aacafbc83eeda25e31908c9e8db82c4924d594d970",
+     "usage.safetensors": "e26955f2f0c2ace9df3c05a46916a6347a8478fd463eb49f1e6188196826b80d"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3565,
+    "heldout_fvu": 0.14906398917950553,
+    "heldout_l0": 8.324707880765216,
+    "heldout_active_rank": 651.9194375745966,
+    "sha256": {
+     "config.yaml": "7e71c2d4b41f6b78b3f941e2188e18158331fb30b52c66d980af1fb401794185",
+     "weights.safetensors": "b24033f803501272a818a7137407e647a85082459ef573f0b9f3a73baa86cea1",
+     "postnorm.safetensors": "3301e848b5a8d912b73d4644e92f433d666ec114b1653fe64ad77306dcc5c825"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "a9947f9f939d3caf56193038453cdd4668db8224b50010a30e3258732b342c96",
+     "postnorm.safetensors": "de5121eeeb36fda90c5053ee0a97a34f2b6a8e8be3742a0205d01793c402fd5b"
+    }
+   }
+  },
+  "21": {
+   "state": {
+    "sites": [
+     "resid_mid.21",
+     "resid_post.21"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.21": 0.23071103155587083,
+     "resid_post.21": 0.23789687847926683
+    },
+    "sha256": {
+     "cfg.json": "79aceefb39020cd46c61d63239539730058b7b3ff2e9dfabcac8151402dad4c4",
+     "weights.safetensors": "c6b35883d1a351b99ef449997e26a39ef61df95a42bbca7ec3c0690add01c73e",
+     "usage.safetensors": "959dde1715ccd3aef91e79f19138cd831170cf87008aede8e92049a852793b5b"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 3407,
+    "heldout_fvu": 0.1461167318999439,
+    "heldout_l0": 8.17752767789996,
+    "heldout_active_rank": 671.596544331409,
+    "sha256": {
+     "config.yaml": "eb9ade5fff57fd26a26e0bfde88a14fea0b5facf4961396de1d5c2fc719cdd9d",
+     "weights.safetensors": "3e6cb148a2351a5f316f08391a681663b0a52ad5800a8219656b6dc77397fb0a",
+     "postnorm.safetensors": "cc315994356668762eabb2d2ba291ca555fd407ff06acab8e9e373767cc5b4c6"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "169d07089bb2739f1c8f17353932e0c8d183c11a807966539bfc62dadb9bcfd0",
+     "postnorm.safetensors": "5ba2090f137513597a675c4880c509712873917a0fd715c21c6fcb2b3d6517e2"
+    }
+   }
+  },
+  "22": {
+   "state": {
+    "sites": [
+     "resid_mid.22",
+     "resid_post.22"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.22": 0.2454622995574413,
+     "resid_post.22": 0.25511680622758204
+    },
+    "sha256": {
+     "cfg.json": "1aa46bdce66f5161d84b7145f4ccb552e5c0df7b7a9cd6e6d8bb6e07f5f97666",
+     "weights.safetensors": "91fe13b4eb9207f65d46b244c7f76e582f3c9649dd808094ba1caa1b7451640e",
+     "usage.safetensors": "42799ed1696b80b2b19579e2b0ab3097af35a941d92ef78f4d4ce1e137c22476"
+    }
+   },
+   "mlp": {
+    "penalty": 7.5e-05,
+    "transforms": 3968,
+    "alive": 2960,
+    "heldout_fvu": 0.12341047635566041,
+    "heldout_l0": 7.754769503612438,
+    "heldout_active_rank": 634.1771460427806,
+    "sha256": {
+     "config.yaml": "2e889e983c64a9fa29f44004fa98ddd5994d9632a2a184fd2c3c6dedc029762f",
+     "weights.safetensors": "ff2971c95c60ac0fd450e73981ed179b16def26182c167d3ebda882f702cd58e",
+     "postnorm.safetensors": "a22b029f27fa048b1f51241f1dcb01a1e76ddba7e57e06ecbfd3f29871563a6b"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "c1094119bd1095e9f6a12c964471651eb594b1d67dc465f9b6c0982fb5bd7411",
+     "postnorm.safetensors": "eee4c8064989f2e2eadb80b1325c5cfaf84ee591558c79f1adebff85f4d80ec4"
+    }
+   }
+  },
+  "23": {
+   "state": {
+    "sites": [
+     "resid_mid.23",
+     "resid_post.23"
+    ],
+    "form": "bsf",
+    "input": "token_rms",
+    "groups": 16384,
+    "group_size": 4,
+    "k": 24,
+    "steps": 7325,
+    "heldout_fvu_own_units": {
+     "resid_mid.23": 0.2666384008258337,
+     "resid_post.23": 0.2585743906842028
+    },
+    "sha256": {
+     "cfg.json": "0e7b9e9b09f954a9aef6751fa399c1e953726e7a00716f4157112a67f9209451",
+     "weights.safetensors": "50e805d6eb6f4d331eaae20de20c0464f4b7338c7b2d74051df313a54b938da0",
+     "usage.safetensors": "996fd5345f8286a6855d35bc38222382f37be24cba49fd599dae1fdba657ae0b"
+    }
+   },
+   "mlp": {
+    "penalty": 2.5e-05,
+    "transforms": 3968,
+    "alive": 3327,
+    "heldout_fvu": 0.020604586397266783,
+    "heldout_l0": 16.09422645928664,
+    "heldout_active_rank": 1492.8497592331378,
+    "sha256": {
+     "config.yaml": "80ec2c8e4f7b2c711bd604ee78963cd52be90f43908090a9863893bc839fa7f5",
+     "weights.safetensors": "3c2606a353be795f093bf2ec0fffdbe1609e4667b37819946020bb75c672b830",
+     "postnorm.safetensors": "d47aa6d04df61b27a775599992ba15dd2eb8c307a3e58df1633b9f060336a086"
+    },
+    "tensor_bytes_sha256": {
+     "weights.safetensors": "8b5db5a76575384e28ce8e4d386e4f2f2a85c4f4fed772c80a7edd219c0331e9",
+     "postnorm.safetensors": "801ccc7b52884e660a7e9474fc9202b13853a8bd268f941b67fcaa4e14bf98ea"
+    }
+   }
+  }
+ }
+}

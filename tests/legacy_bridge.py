@@ -59,6 +59,9 @@ def run_legacy(script: str, args: list[str], settings: Settings, timeout_s: int 
                  json.dumps(args).encode(), device.encode(), str(coverage).encode()):
         key.update(hashlib.sha256(part).digest())
     out = TEST_OUT / "legacy" / f"{script_path.stem}-{key.hexdigest()[:16]}"
+    if os.environ.get("STATESCOPE_USED_RUNS"):       # cleanup aid: append every cached run folder this session resolves to that file
+        with open(os.environ["STATESCOPE_USED_RUNS"], "a") as f:
+            f.write(f"{out}\n")
     if (out / "DONE").is_file():
         return out
     if out.exists():                 # an earlier attempt that did not finish: the legacy trainers refuse to write into a used folder

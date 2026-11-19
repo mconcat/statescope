@@ -37,6 +37,9 @@ def run_new(script: str, args: list[str], settings: Settings, timeout_s: int = 3
     for part in (_source_digest(exclude), script_path.read_bytes(), json.dumps(args).encode(), settings.train_device.encode()):
         key.update(hashlib.sha256(part).digest())
     out = TEST_OUT / "new" / f"{script_path.stem}-{key.hexdigest()[:16]}"
+    if os.environ.get("STATESCOPE_USED_RUNS"):       # cleanup aid: append every cached run folder this session resolves to that file
+        with open(os.environ["STATESCOPE_USED_RUNS"], "a") as f:
+            f.write(f"{out}\n")
     if (out / "DONE").is_file():
         return out
     if out.exists():
