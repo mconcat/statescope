@@ -8,9 +8,9 @@ import torch
 from safetensors.torch import load_file
 
 from statescope.reader import StateVocab
-from statescope.vocab.model import StateDictionary, balance_encoder_decoder
-from statescope.vocab.recipe import VocabRecipe
-from statescope.vocab.train import VocabTrainer
+from statescope.earlier_design.vocab.model import StateDictionary, balance_encoder_decoder
+from statescope.earlier_design.vocab.recipe import VocabRecipe
+from statescope.earlier_design.vocab.train import VocabTrainer
 
 D_MODEL = 32
 SITES = ["resid_mid.3", "resid_post.3"]

@@ -1,7 +1,7 @@
 """ONE training step of the new state dictionary from an injected state (rule R4.5): the counterpart of
 tests/legacy_scripts/vocab_step_reference.py, with the same outputs.
 
-The dictionary is built and calibrated as statescope.vocab.train.train_vocab does it, every --dead-every-th group is marked dead, and
+The dictionary is built and calibrated as statescope.earlier_design.vocab.train.train_vocab does it, every --dead-every-th group is marked dead, and
 one step is taken on the first --batch-tokens held-out pile tokens of the calibration folder (x = resid_mid, x + y = resid_post).
 
 Writes <out>/step.safetensors and <out>/step.json.
@@ -14,14 +14,14 @@ import os
 import torch
 from safetensors.torch import save_file
 
-from statescope.calibration import load_calibration
+from statescope.earlier_design.calibration import load_calibration
 from statescope.config import MIX_08B, MODELS, DataPaths
-from statescope.data.mix import training_stream
+from statescope.earlier_design.data.mix import training_stream
 from statescope.heldout import load_heldout
 from statescope.lm import load_language_model
-from statescope.vocab.export import weight_tensors
-from statescope.vocab.recipe import VocabRecipe, site_names
-from statescope.vocab.train import build_trainer
+from statescope.earlier_design.vocab.export import weight_tensors
+from statescope.earlier_design.vocab.recipe import VocabRecipe, site_names
+from statescope.earlier_design.vocab.train import build_trainer
 
 DEAD_SINCE = 2_000_000          # above the dead window (VocabRecipe.dead_window_tokens)
 PARAMETERS = ("D", "log_gamma", "b_dec", "E")      # the original's parameters; log_gamma is the frozen all-zero tensor of the file format

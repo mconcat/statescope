@@ -11,7 +11,7 @@ from safetensors.torch import load_file
 
 from conftest import REPO, Settings
 from statescope.heldout import HELDOUT_SPLITS, load_heldout
-from statescope.manifest import load_manifest, verify_files
+from statescope.earlier_design.manifest import load_manifest, verify_files
 from statescope.metrics import molt_heldout_numbers, vocab_heldout_fvu
 from statescope.reader import MoltOps, StateVocab, fvu
 from legacy_bridge import run_legacy

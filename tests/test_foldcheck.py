@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from conftest import TEST_OUT, Settings
-from statescope.foldcheck import fold_error_verdict, gate_flip_check
+from statescope.earlier_design.foldcheck import fold_error_verdict, gate_flip_check
 from statescope.heldout import load_heldout
 from statescope.reader import MoltOps
 

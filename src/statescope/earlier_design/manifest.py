@@ -2,6 +2,9 @@
 
     manifest = load_manifest("release/qwen35-08b/manifest.json")
     problems = verify_files(manifest, "/path/to/release")        # [] when every file is present with the listed size and hash
+
+This is the earlier design's manifest (manifest.json, layers/Lxx/{vocab,molt}/), checked by `statescope verify`; the published
+set's MANIFEST.json (state/L<L>/, mlp/L<L>/) is checked by demo/verify_release.py.
 """
 from __future__ import annotations
 

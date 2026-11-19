@@ -370,3 +370,11 @@ only in part for the route through 410 and 1749 alone), the six-transform route 
 
 Not covered by R9: everything in the note that passes through the GDN dictionary's registers; the selection of the transforms and
 groups (the demonstration takes the original's choices as given and says so); other cells, seeds or models.
+
+## Note on module paths (2026-11-19, written before the modules were moved; no rule and no tolerance is changed)
+
+The earlier design's modules are gathered under `statescope.earlier_design`: the folders `vocab/`, `molt/`, `prep/`, `data/`, `train/`
+and the modules `calibration`, `manifest`, `release`, `foldcheck` keep their names and contents and get the longer path. Where a rule
+above names a module, read it by its new path: `statescope.foldcheck` (R6) is `statescope.earlier_design.foldcheck`, and
+`statescope.release` (R7) is `statescope.earlier_design.release`. `statescope/splice.py` keeps its path, because the published
+manifest's `splice` field (R7) names that file. The lines above are left as they were written.

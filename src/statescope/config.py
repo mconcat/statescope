@@ -74,3 +74,5 @@ class MixSpec:
 
 SOURCES = ("pile", "ultra", "cont", "chat")
 MIX_08B = MixSpec()
+# the training mixture and reserved rows of each model; a model without an entry cannot be calibrated or trained from the command line
+MIXES: dict[str, MixSpec] = {"qwen3.5-0.8b": MIX_08B}

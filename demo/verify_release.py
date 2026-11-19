@@ -1,6 +1,10 @@
 """Check a downloaded copy of the published set against its MANIFEST.json: every file of state/L<L>/ and mlp/L<L>/ by sha256.
 
     python demo/verify_release.py --release <folder with MANIFEST.json, state/ and mlp/>
+
+This script knows the published layout only (MANIFEST.json, state/L<L>/, mlp/L<L>/) and compares sha256 only. It uses the standard
+library only, so it runs before anything is installed. The earlier design's release (manifest.json, layers/Lxx/{vocab,molt}/, size
+and sha256) is checked by `statescope verify` instead.
 """
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from pathlib import Path
 
 
 def sha256(path: Path) -> str:
+    # this script's own copy on purpose: importing the package's sha256 would need the package installed
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 24), b""):

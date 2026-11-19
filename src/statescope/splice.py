@@ -14,6 +14,9 @@ replaced and that have a next token.
 Per arm: dce = CE(arm) - CE(clean) in nats, kl = KL(clean || arm) in nats, fvu_batchwise = FVU of the replacement on these tokens
 (variance around each batch's own mean). The recovered fractions use different baselines (MLP: zero ablation; state: mean ablation),
 so the two are not comparable with each other.
+
+This module belongs to the EARLIER design (it reads that design's dictionaries with MoltOps and StateVocab). The file stays at
+statescope/splice.py because the manifest of release/qwen35-08b names this path in its `splice` field.
 """
 from __future__ import annotations
 

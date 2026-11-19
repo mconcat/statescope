@@ -12,11 +12,11 @@ from safetensors.torch import load_file
 
 from conftest import TEST_OUT, Settings
 from statescope.config import MIX_08B, MODELS
-from statescope.data.mix import training_stream
+from statescope.earlier_design.data.mix import training_stream
 from statescope.heldout import HELDOUT_SPLITS
 from statescope.lm import load_language_model
-from statescope.prep.calibrate import calibrate
-from statescope.prep.fixedmap import fixed_map
+from statescope.earlier_design.prep.calibrate import calibrate
+from statescope.earlier_design.prep.fixedmap import fixed_map
 from test_stream import data_paths_08b
 
 LAYER = 19

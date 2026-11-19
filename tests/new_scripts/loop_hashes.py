@@ -6,11 +6,11 @@ import os
 
 import torch
 
-from statescope.calibration import load_calibration
+from statescope.earlier_design.calibration import load_calibration
 from statescope.config import MIX_08B, MODELS, DataPaths
-from statescope.data.mix import training_stream
+from statescope.earlier_design.data.mix import training_stream
 from statescope.lm import Capturer, load_language_model
-from statescope.train.loop import LoopSettings, training_batches
+from statescope.earlier_design.train.loop import LoopSettings, training_batches
 
 
 def digest(t: torch.Tensor) -> str:

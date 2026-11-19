@@ -6,12 +6,12 @@ import os
 import torch
 from safetensors.torch import load_file
 
-from statescope.calibration import load_calibration
+from statescope.earlier_design.calibration import load_calibration
 from statescope.config import MIX_08B, MODELS, DataPaths
-from statescope.data.mix import training_stream
+from statescope.earlier_design.data.mix import training_stream
 from statescope.lm import Capturer, load_language_model
-from statescope.molt.recipe import MoltRecipe
-from statescope.molt.train import train_molt
+from statescope.earlier_design.molt.recipe import MoltRecipe
+from statescope.earlier_design.molt.train import train_molt
 
 MODEL = "qwen3.5-0.8b"          # this runner is the 0.8B test run: the model and its token mixture (MIX_08B) go together
 
@@ -21,7 +21,7 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--layer", type=int, required=True)
     ap.add_argument("--calib-dir", required=True)
-    ap.add_argument("--fixmap", required=True, help="safetensors file of statescope.prep.fixedmap (tensor W_skip_std)")
+    ap.add_argument("--fixmap", required=True, help="safetensors file of statescope.earlier_design.prep.fixedmap (tensor W_skip_std)")
     ap.add_argument("--steps", type=int, required=True, help="training budget in batches")
     ap.add_argument("--log-every", type=int, required=True)
     ap.add_argument("--mem-gb", type=float, required=True, help="cap of this process on the GPU")

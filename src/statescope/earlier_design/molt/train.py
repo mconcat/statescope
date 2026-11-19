@@ -2,13 +2,13 @@
 
     whitener  <- the first `whiten_tokens` tokens of the stream (the stream is rewound afterwards)
     model     <- seeded initial weights (CPU), the whitener, the frozen skip map; then moved to the GPU
-    loop      <- statescope.train.loop.training_batches; per batch: u = u_from_z(z), one train_step, counters
+    loop      <- statescope.earlier_design.train.loop.training_batches; per batch: u = u_from_z(z), one train_step, counters
     at the end: export (release format), evaluation of the export, final.json
 
 Written into `out_dir`:
     whitener.safetensors      W (d, d)
     curve.jsonl               one record per logged step
-    export/                   cfg.json, input.json, weights.safetensors, freq_train.safetensors  (statescope.molt.export)
+    export/                   cfg.json, input.json, weights.safetensors, freq_train.safetensors  (statescope.earlier_design.molt.export)
     final.json                held-out FVU per split and pooled, mean active atoms, fold error, dead atoms at the end
 """
 from __future__ import annotations
@@ -19,16 +19,16 @@ import os
 import torch
 from safetensors.torch import save_file
 
-from statescope.calibration import CalibStats
-from statescope.data.mix import MixStream
+from statescope.earlier_design.calibration import CalibStats
+from statescope.earlier_design.data.mix import MixStream
+from statescope.earlier_design.molt.evaluate import QuickEval, final_eval
+from statescope.earlier_design.molt.export import write_export
+from statescope.earlier_design.molt.model import MoltModel, init_model, standardized_mlp_input, whitener_from
+from statescope.earlier_design.molt.recipe import MoltRecipe, RunPlan
+from statescope.earlier_design.molt.step import Counters, train_step
+from statescope.earlier_design.train.loop import LoopSettings, first_raw_inputs, training_batches
 from statescope.heldout import HELDOUT_SPLITS, load_heldout
 from statescope.lm import Capturer, LanguageModel
-from statescope.molt.evaluate import QuickEval, final_eval
-from statescope.molt.export import write_export
-from statescope.molt.model import MoltModel, init_model, standardized_mlp_input, whitener_from
-from statescope.molt.recipe import MoltRecipe, RunPlan
-from statescope.molt.step import Counters, train_step
-from statescope.train.loop import LoopSettings, first_raw_inputs, training_batches
 
 
 def check_calibration(lm: LanguageModel, layer: int, stats: CalibStats) -> None:
@@ -57,7 +57,7 @@ def train_molt(lm: LanguageModel, capturer: Capturer, stream: MixStream, stats: 
 
     stats      calibration statistics of the layer, on `device`
     calib_dir  the calibration folder (its held-out activations are the evaluation data)
-    skip_map   (d, d) the fixed linear part in standardized coordinates (W_skip_std of statescope.prep.fixedmap)
+    skip_map   (d, d) the fixed linear part in standardized coordinates (W_skip_std of statescope.earlier_design.prep.fixedmap)
     Returns the content of final.json."""
     if torch.get_float32_matmul_precision() != "highest":
         raise RuntimeError("the recipe is defined with full-precision fp32 matmuls: torch.set_float32_matmul_precision('highest')")

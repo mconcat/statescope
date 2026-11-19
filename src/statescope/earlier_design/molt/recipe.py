@@ -1,7 +1,7 @@
 """Every hyperparameter of the MLP dictionary recipe "M1w", in one place. The defaults are the values of the released dictionaries.
 
 The recipe in words. The MLP of one layer is approximated, in standardized coordinates, by a frozen linear map (the "skip map", computed
-beforehand by statescope.prep.fixedmap) plus a sum of gated low-rank maps ("atoms"). Atoms come in rank tiers 1, 2, 4, 8, 16. An atom's
+beforehand by statescope.earlier_design.prep.fixedmap) plus a sum of gated low-rank maps ("atoms"). Atoms come in rank tiers 1, 2, 4, 8, 16. An atom's
 gate reads the whitened input; per training batch a fixed number of (token, atom) entries is switched on in each tier (the largest gate
 inputs of the tier over the whole batch), and at inference each tier uses a threshold learned as a running mean of the batch cut-off.
 Atoms that have not fired for `dead_tokens` tokens get an auxiliary loss that asks them to explain the current residual.

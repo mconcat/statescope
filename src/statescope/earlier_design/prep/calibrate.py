@@ -18,7 +18,7 @@ import torch
 from safetensors.torch import save_file
 
 from statescope.config import DataPaths, MixSpec
-from statescope.data.sources import UltraChat, corpus_prompt_lengths, corpus_tokens, pile_first_rows
+from statescope.earlier_design.data.sources import UltraChat, corpus_prompt_lengths, corpus_tokens, pile_first_rows
 from statescope.lm import Capturer, LanguageModel
 
 SOURCE_CODES = {"pile": 0, "cont": 1, "chat": 2, "ultra": 3}      # the `src` column of the shards

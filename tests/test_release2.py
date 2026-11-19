@@ -2,7 +2,6 @@
 The pass/fail rule is R8.7 of tests/EQUIVALENCE_RULES.md (written before these checks were first run)."""
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import struct
@@ -13,6 +12,7 @@ import torch
 from safetensors import safe_open
 
 from conftest import REPO, TEST_OUT, Settings
+from hashing import sha256_file
 from statescope.config import MODELS
 from statescope.reader import PublicMolt, write_post_norm
 from test_reader2 import check_molt_reader
@@ -27,14 +27,6 @@ MLP_FILES = ("config.yaml", "weights.safetensors", "postnorm.safetensors")
 PRIVATE = re.compile("|".join(FORBIDDEN + [r"/root/", r"/workspace", r"\bdesktop\b", r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"]))
 
 
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 24), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
 def _header(path: Path) -> dict:
     """the JSON header of a safetensors file (tensor table and metadata), without reading the tensors"""
     with open(path, "rb") as f:
@@ -47,8 +39,8 @@ def test_manifest_hashes(layer: int, settings: Settings) -> None:
     """R8.7 (a)"""
     root = settings.need_release2()
     entry = json.loads((root / "MANIFEST.json").read_text())["layers"][str(layer)]
-    assert {name: _sha256(root / "state" / f"L{layer}" / name) for name in STATE_FILES} == entry["state"]["sha256"]
-    assert {name: _sha256(root / "mlp" / f"L{layer}" / name) for name in MLP_FILES} == entry["mlp"]["sha256"]
+    assert {name: sha256_file(root / "state" / f"L{layer}" / name) for name in STATE_FILES} == entry["state"]["sha256"]
+    assert {name: sha256_file(root / "mlp" / f"L{layer}" / name) for name in MLP_FILES} == entry["mlp"]["sha256"]
 
 
 @pytest.mark.parametrize("layer", range(23))

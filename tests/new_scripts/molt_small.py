@@ -18,13 +18,13 @@ import json  # noqa: E402
 import torch  # noqa: E402
 from safetensors.torch import load_file, save_file  # noqa: E402
 
-from statescope.calibration import CalibStats  # noqa: E402
+from statescope.earlier_design.calibration import CalibStats  # noqa: E402
 from statescope.heldout import HELDOUT_SPLITS  # noqa: E402
-from statescope.molt.evaluate import QuickEval, final_eval  # noqa: E402
-from statescope.molt.export import export_cfg, export_tensors, write_export  # noqa: E402
-from statescope.molt.model import MoltModel, init_model, whitener_from  # noqa: E402
-from statescope.molt.recipe import MoltRecipe, RunPlan  # noqa: E402
-from statescope.molt.step import Counters, train_step  # noqa: E402
+from statescope.earlier_design.molt.evaluate import QuickEval, final_eval  # noqa: E402
+from statescope.earlier_design.molt.export import export_cfg, export_tensors, write_export  # noqa: E402
+from statescope.earlier_design.molt.model import MoltModel, init_model, whitener_from  # noqa: E402
+from statescope.earlier_design.molt.recipe import MoltRecipe, RunPlan  # noqa: E402
+from statescope.earlier_design.molt.step import Counters, train_step  # noqa: E402
 from statescope.reader import MoltOps  # noqa: E402
 
 

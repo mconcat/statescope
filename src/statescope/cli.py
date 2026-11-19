@@ -1,4 +1,7 @@
-"""Command line of the package: one subcommand per step of the pipeline.
+"""Command line of the EARLIER design: one subcommand per step of its pipeline.
+
+Its modules are in statescope.earlier_design. The file stays at statescope/cli.py because the installed console script `statescope`
+points at statescope.cli:main.
 
     statescope verify    --manifest release/qwen35-08b/manifest.json --root <release folder>
     statescope calibrate --model qwen3.5-0.8b --layer 19 --out <calib dir>            <data paths>
@@ -8,6 +11,9 @@
 
     statescope train-vocab --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --tokens 50e6 --out <run dir>     <data paths>
     statescope train-molt  --model qwen3.5-0.8b --layer 19 --calib-dir <calib dir> --fixmap <file> --tokens 29.3e6 --out <run dir>   <data paths>
+
+`statescope verify` checks the earlier design's release (manifest.json, layers/Lxx/{vocab,molt}/; size and sha256 of every file).
+The published set (MANIFEST.json, state/L<L>/, mlp/L<L>/) is checked by `python demo/verify_release.py --release <folder>`.
 
 <data paths> = --pile-dir --ultrachat-dir --view-corpus --full-corpus (see statescope.config.DataPaths).
 The order for one layer: calibrate, fixedmap, then the two trainers (independent of each other), then foldcheck and splice on the exports.
@@ -21,10 +27,7 @@ import os
 
 import torch
 
-from statescope.config import MIX_08B, MODELS, DataPaths, MixSpec
-
-# the training mixture and reserved rows of each model; a model without an entry cannot be calibrated or trained from the command line
-MIXES: dict[str, MixSpec] = {"qwen3.5-0.8b": MIX_08B}
+from statescope.config import MIXES, MODELS, DataPaths, MixSpec
 
 
 def _add_data_paths(parser: argparse.ArgumentParser) -> None:
@@ -54,7 +57,7 @@ def _cap_gpu(device: str, gb: float | None) -> None:
 
 
 def cmd_verify(args: argparse.Namespace) -> None:
-    from statescope.manifest import load_manifest, verify_files
+    from statescope.earlier_design.manifest import load_manifest, verify_files
     problems = verify_files(load_manifest(args.manifest), args.root, workers=args.workers)
     for line in problems:
         print(line)
@@ -64,8 +67,8 @@ def cmd_verify(args: argparse.Namespace) -> None:
 
 
 def cmd_calibrate(args: argparse.Namespace) -> None:
+    from statescope.earlier_design.prep.calibrate import calibrate
     from statescope.lm import load_language_model
-    from statescope.prep.calibrate import calibrate
     mix = _mix(args.model)                      # before anything is loaded
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -73,9 +76,9 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
 
 
 def cmd_fixedmap(args: argparse.Namespace) -> None:
-    from statescope.data.mix import training_stream
+    from statescope.earlier_design.data.mix import training_stream
+    from statescope.earlier_design.prep.fixedmap import fixed_map
     from statescope.lm import load_language_model
-    from statescope.prep.fixedmap import fixed_map
     mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
     lm = load_language_model(MODELS[args.model], args.device)
@@ -85,8 +88,8 @@ def cmd_fixedmap(args: argparse.Namespace) -> None:
 
 def _training_setup(args: argparse.Namespace):
     """what both trainers need: the capped device, calibration statistics, the language model and the token stream"""
-    from statescope.calibration import load_calibration
-    from statescope.data.mix import training_stream
+    from statescope.earlier_design.calibration import load_calibration
+    from statescope.earlier_design.data.mix import training_stream
     from statescope.lm import load_language_model
     mix = _mix(args.model)
     _cap_gpu(args.device, args.mem_gb)
@@ -99,9 +102,9 @@ def _training_setup(args: argparse.Namespace):
 
 
 def cmd_train_vocab(args: argparse.Namespace) -> None:
-    from statescope.train.loop import LoopSettings
-    from statescope.vocab.recipe import VocabRecipe
-    from statescope.vocab.train import train_vocab
+    from statescope.earlier_design.train.loop import LoopSettings
+    from statescope.earlier_design.vocab.recipe import VocabRecipe
+    from statescope.earlier_design.vocab.train import train_vocab
     stats, lm, stream = _training_setup(args)
     loop = LoopSettings(tokens=int(args.tokens), seed=args.seed)
     fvu = train_vocab(lm, args.layer, stream, stats, args.calib_dir, VocabRecipe(seed=args.seed), loop, args.out, args.log_every)
@@ -111,9 +114,9 @@ def cmd_train_vocab(args: argparse.Namespace) -> None:
 def cmd_train_molt(args: argparse.Namespace) -> None:
     from safetensors.torch import load_file
 
+    from statescope.earlier_design.molt.recipe import MoltRecipe
+    from statescope.earlier_design.molt.train import train_molt
     from statescope.lm import Capturer
-    from statescope.molt.recipe import MoltRecipe
-    from statescope.molt.train import train_molt
     stats, lm, stream = _training_setup(args)
     capturer = Capturer(lm, args.layer, _mix(args.model).min_pos)
     skip_map = load_file(args.fixmap)["W_skip_std"]
@@ -124,7 +127,7 @@ def cmd_train_molt(args: argparse.Namespace) -> None:
 
 
 def cmd_foldcheck(args: argparse.Namespace) -> None:
-    from statescope.foldcheck import fold_error_verdict, gate_flip_check
+    from statescope.earlier_design.foldcheck import fold_error_verdict, gate_flip_check
     from statescope.heldout import load_heldout
     from statescope.reader import MoltOps
     _cap_gpu(args.device, args.mem_gb)
@@ -138,7 +141,7 @@ def cmd_foldcheck(args: argparse.Namespace) -> None:
 def cmd_splice(args: argparse.Namespace) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    from statescope.manifest import layer_dir
+    from statescope.earlier_design.manifest import layer_dir
     from statescope.reader import MoltOps, StateVocab
     from statescope.splice import load_documents, splice_layer
     _cap_gpu(args.device, args.mem_gb)
@@ -167,7 +170,8 @@ def main() -> None:
         p.add_argument("--device", default="cuda:0")
         p.add_argument("--mem-gb", type=float, default=None, help="cap this process's memory on the device (GiB)")
 
-    p = sub.add_parser("verify", help="compare the release files with the manifest (size and sha256)")
+    p = sub.add_parser("verify", help="check the earlier design's release against its manifest.json (layers/Lxx/{vocab,molt}; size and sha256); "
+                                      "the published set is checked by demo/verify_release.py")
     p.add_argument("--manifest", required=True)
     p.add_argument("--root", required=True, help="folder that holds layers/Lxx/{vocab,molt}/")
     p.add_argument("--workers", type=int, default=4)

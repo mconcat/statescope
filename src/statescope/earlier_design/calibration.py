@@ -1,4 +1,4 @@
-"""Calibration statistics of one layer (written by statescope.prep.calibrate) and the two changes of coordinates built on them.
+"""Calibration statistics of one layer (written by statescope.earlier_design.prep.calibrate) and the two changes of coordinates built on them.
 
   z     = (x - mu_x) / sd_x                     standardized resid_mid; what the shuffle buffer stores (as bf16)
   y_std = (y - mu_y) / sd_y                     standardized MLP output

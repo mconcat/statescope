@@ -2,7 +2,6 @@
 The pass/fail rules are R8.1 - R8.5 of tests/EQUIVALENCE_RULES.md (written before these tests were first run)."""
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from safetensors import safe_open
 from safetensors.torch import load_file
 
 from conftest import TEST_OUT, Settings
+from hashing import sha256_tensor
 from legacy_bridge import run_legacy
 from reader_checks import MAX_DIFFERING, MAX_REL_DIFF_ELSEWHERE
 from statescope.config import MODELS
@@ -56,10 +56,6 @@ def post_norm_dir(settings: Settings) -> Path:
     return out
 
 
-def _sha256(t: torch.Tensor) -> str:
-    return hashlib.sha256(t.contiguous().cpu().numpy().tobytes()).hexdigest()
-
-
 def _reference(settings: Settings, layer: int, post_norm_dir: Path | None, molt_dir: Path | None = None,
                post_norm: Path | None = None) -> tuple[dict[str, torch.Tensor], dict, dict[str, tuple[torch.Tensor, torch.Tensor]]]:
     """reference tensors and info of one layer (cached run inside the second snapshot), and the same held-out tokens loaded by the new code.
@@ -75,7 +71,7 @@ def _reference(settings: Settings, layer: int, post_norm_dir: Path | None, molt_
     held = {s: load_heldout(str(settings.calib2_dir(layer)), s, N_TOKENS) for s in HELDOUT_SPLITS}
     assert list(info["splits"]) == list(HELDOUT_SPLITS)
     for s, (x, y) in held.items():
-        assert {"x": _sha256(x), "y": _sha256(y)} == info["input_sha256"][s], f"layer {layer}, split {s}: the two sides read different tokens"
+        assert {"x": sha256_tensor(x), "y": sha256_tensor(y)} == info["input_sha256"][s], f"layer {layer}, split {s}: the two sides read different tokens"
     return load_file(str(out / "reference.safetensors")), info, held
 
 

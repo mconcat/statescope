@@ -4,13 +4,13 @@ import os
 
 import torch
 
-from statescope.calibration import load_calibration
+from statescope.earlier_design.calibration import load_calibration
 from statescope.config import MIX_08B, MODELS, DataPaths
-from statescope.data.mix import training_stream
+from statescope.earlier_design.data.mix import training_stream
 from statescope.lm import load_language_model
-from statescope.train.loop import LoopSettings
-from statescope.vocab.recipe import VocabRecipe
-from statescope.vocab.train import train_vocab
+from statescope.earlier_design.train.loop import LoopSettings
+from statescope.earlier_design.vocab.recipe import VocabRecipe
+from statescope.earlier_design.vocab.train import train_vocab
 
 
 def main() -> None:

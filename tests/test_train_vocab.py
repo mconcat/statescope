@@ -66,6 +66,7 @@ def test_vocab_training_equals_legacy(settings: Settings):
     args = ["--layer", str(LAYER), "--calib-dir", str(settings.calib_dir_08b(LAYER)), "--seed", "0",
             "--steps", str(SHORT_STEPS), "--log-every", str(LOG_EVERY), "--mem-gb", str(settings.train_gb),
             "--pile-dir", paths.pile_dir, "--ultrachat-dir", paths.ultrachat_dir, "--view-corpus", paths.view_corpus, "--full-corpus", paths.full_corpus]
+    # `exclude` matches nothing since the dictionary packages moved under earlier_design/: the cache key covers all of src/statescope
     new = _new_files(run_new("train_vocab.py", args, settings, timeout_s=6 * 3600, exclude=("molt",)))
     failures, report = compare(new, a, b)
     (TEST_OUT / "measured").mkdir(parents=True, exist_ok=True)
