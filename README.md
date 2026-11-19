@@ -6,11 +6,11 @@ statescope is a reader in one Python file and a set of dictionary weights for `Q
 
 - `python demo/verify_release.py --release <folder>` checks the 144 downloaded files against the manifest.
 - `python demo/line_count.py --release <folder>` re-runs the traced line-count chain for the model's line-break decision, from one layer-8 MLP transform through one state group, the model's layer-9 mixer and a second state group to two layer-9 MLP transforms.
-- `pytest -m "not release and not legacy"` runs the 61 tests that need no private data.
+- `pytest -m "not legacy"` runs the 36 tests that need no private data.
 
 **You cannot reproduce from the published files**
 
-- Training cannot be reproduced because the trainers for this set are not in the repository, and the included training code belongs to an earlier design that did not train these weights.
+- Training cannot be reproduced because the trainers for this set are not in the repository.
 - The per-layer reconstruction numbers and the spliced-in loss cannot be reproduced because the held-out activations and texts behind them are not published.
 
 **Limits**
@@ -28,7 +28,7 @@ A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site
 
 A group is a set of 4 directions in a state dictionary. A frame is the orthonormal basis of a group's 4-dimensional write subspace. A code gives a token's coordinates in that frame, multiplied by a per-group scale. A transform is a linear operation in an MLP dictionary with its own read and write matrices. Its write is what it adds to the MLP output. A gate controls a transform through a learned threshold on its pre-activation.
 
-The repository contains the reader, a demonstration, tests, and training code for an earlier design. That training code did not train these weights. The weights are in [mconcat/statescope-qwen3.5-0.8b](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b).
+The repository contains the reader, a demonstration and tests. The weights are in [mconcat/statescope-qwen3.5-0.8b](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b).
 
 ## Install
 
@@ -44,10 +44,10 @@ This command adds transformers and flash-linear-attention, which `capture` and t
 pip install -e '.[model]'
 ```
 
-This command also adds numpy, pyarrow, pytest and coverage:
+This command also adds numpy and pytest:
 
 ```sh
-pip install -e '.[model,train,dev]'
+pip install -e '.[model,dev]'
 ```
 
 Without flash-linear-attention, transformers silently uses a slow GatedDeltaNet reference implementation. A warning about a missing `causal_conv1d` means that a slower reference implementation is being used with unchanged values.
@@ -114,7 +114,7 @@ This repository measured raw FVU with and without position 0. At layer 6, `resid
 
 The original project also recorded the state trainer's own held-out FVU in `MANIFEST.json` as `heldout_fvu_own_units`. It uses the dictionary's per-token-RMS-normalised, site-standardised units. It includes position 0 on the first 4,096 tokens of each of four held-out splits. This repository's reader reproduces all 48 numbers within 6.9e-7. At early layers, this number is lower than the number on all tokens because the first 4,096 tokens are an easier subset, not because of position 0. At layer 0, `resid_mid`, it is 0.0533 on the subset against 0.0693 on all tokens in the same units, or 0.0777 in raw units. At layer 9, it is 0.2452 on the subset against 0.2438 on all tokens in the same units.
 
-The config files carry internal names of the original project. The most visible are `kind`, which is `sasa_proper_segment` in `state/L<L>/cfg.json`, and `data.class_path`, which is `measure.public_molt.shard_data.ShardDataModule` in `mlp/L<L>/config.yaml`. The model card's [Names inside the files](release/qwen35-08b-v2/MODEL_CARD.md#names-inside-the-files) section explains these fields and why the files were left unchanged.
+Before publication, the state configs were edited to set `kind` to `state_dictionary` and remove the original project's configuration label, source file path, run label and source-file md5 record. The line naming the original project's data module was removed from the MLP configs, and no safetensors file was changed. The model card's [Config files](release/qwen35-08b-v2/MODEL_CARD.md#config-files) section describes these edits.
 
 ## Demonstration: line counting
 
@@ -193,21 +193,22 @@ The demonstration has these caveats:
 ## Repository layout
 
 - `src/statescope/reader.py` contains the reader.
+- `src/statescope/config.py` defines the two models, and `src/statescope/lm.py` loads the language model.
+- `src/statescope/heldout.py` and `src/statescope/metrics.py` are used by the measuring tools and tests.
 - `demo/line_count.py` runs the demonstration, and `demo/verify_release.py` checks the weights. `demo/line_count_items.safetensors` holds the demonstration items.
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
-- `devtools/` holds original-code freezing and tracing tools, tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
-- The earlier design's code is under `src/statescope/earlier_design/` in `vocab/`, `molt/`, `prep/`, `data/` and `train/`. The `statescope` command line and `release/qwen35-08b/` also belong to that design. `examples/reconstruct_texts.py` is an example for it.
+- `devtools/` holds tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
 
 ## Tests
 
-Install the `dev` extra for pytest. This command needs no private data:
+Install the `dev` extra for pytest. This command runs the 36 tests that need no private data:
 
 ```sh
-pytest -m "not release and not legacy"
+pytest -m "not legacy"
 ```
 
-The other tests need the frozen original code, weights and settings from `tests/local.env.example`. Run them with:
+The other tests carry the marker `legacy` and need the frozen original code, the original project's results and the staged weight folders named in `tests/local.env.example`. This command runs everything:
 
 ```sh
 pytest
@@ -228,7 +229,7 @@ A missing required path fails its test. Nothing is skipped silently.
 
 ## What is not shown
 
-- The trainers for this set are absent. Porting them is planned. The included trainers belong to the earlier design and did not train these weights.
+- The trainers for this set are absent. Porting them is planned.
 - The original project recorded MLP FVU, transforms on per token and transforms alive at training on a held-out shard of each layer's training capture. Position 0 was included. The shards were subsequently deleted, including the shard for layer 23's separate run. These training-time numbers cannot be recomputed from the published files. Transforms on per token is the mean number of open gates. Transforms alive counts those that fired at least once on that shard. The others never fired there. At layer 9, 2035 of 3968 were alive on 267,271 tokens. Layer 23's shard also held 267,271 tokens. The held-out activations behind this repository's raw state and MLP FVU measurements are not published, so users cannot recompute those exact numbers either.
 - Spliced-in loss is the increase in next-token cross-entropy when a dictionary reconstruction replaces the true activation in the forward pass, one layer and one dictionary at a time. The original project measured it in nats on text with clean cross-entropy 2.808. It used FineWeb-Edu rows outside the training mixture, taking the first 100 documents of at least 256 tokens and the first 256 tokens of each. Position 0 was not replaced. Loss was averaged over positions 1 to 254, or 25,400 positions. The dictionaries are the released ones. The original project separately measured the released layer 23 MLP dictionary on the same kind of web text, 100 documents of 256 tokens, and recorded +0.0502. In the original project's comparison on the same text, the earlier set had smaller increases at all 24 state layers and MLP layers 0 to 22. For the state dictionary at layer 9, it recorded +0.243 here against +0.161 for the earlier set. At layer 23, the released MLP dictionary had the smaller increase, +0.0502 against +0.0840 for the earlier set.
 - This repository did not repeat the original project's training-time MLP held-out measurements or the spliced-in loss measurements.
@@ -237,45 +238,7 @@ A missing required path fails its test. Nothing is skipped silently.
 
 ## Earlier design
 
-The earlier design uses an untied state dictionary and an M1w MLP dictionary with 41,484 atoms. Its training code reproduces how an earlier, unpublished set was trained. It did not train the current weights.
-
-The following subsections describe the earlier design and not the current weights.
-
-### Training pipeline for one layer
-
-Training needs these data sources:
-
-- Pre-tokenized Pile shards come from `chanind/pile-uncopyrighted-qwen-3.5-1024-abbrv-2B`.
-- UltraChat 200k provides parquet files.
-- The model supplies continuations and chat answers; their generation code is not included yet.
-
-Supply `--pile-dir`, `--ultrachat-dir`, `--view-corpus` and `--full-corpus`.
-
-1. Run `statescope calibrate` for calibration statistics and held-out activations.
-2. Run `statescope fixedmap` for the fixed mean-gate map, needed only by the MLP dictionary.
-3. Run `statescope train-vocab` and `statescope train-molt` independently. Release budgets were 50M and 29.3M tokens, respectively.
-4. Run `statescope foldcheck` and `statescope splice` on the exports.
-
-### What the comparisons showed
-
-Every part was compared with the frozen original. Comparisons used Qwen3.5-0.8B, except for the reader pilot. Measurements ran on one RTX 5090 machine.
-
-- All 168 release files match manifest sizes and sha256. Reader outputs are bit-identical to the released reader at layers 0 and 19. Against original readers on 4,096 held-out tokens, there are 0 differing gate decisions and 0 tokens with different group sets. Reader-only FVU matches the manifest within 1e-5 at layers 0, 9, 19 and 23.
-- A Qwen3.5-4B pilot export at layer 16, width 2,560, loads with 0 differing gate decisions against the original readers.
-- Capture is bit-identical. Spliced losses at layers 9 and 19 match original and recorded values exactly.
-- The first 200 token-stream units, or 52.4M tokens, match token for token. Calibration and held-out activations match the release's training files bit for bit; the fixed map matches its recorded md5. All 300 short-run batches match original sha256 values.
-- State training at layer 19 for 300 steps produces bit-identical tensors, usage counters and per-step numbers. Held-out FVU agrees within 1.2e-8; original evaluation digits themselves vary at that level.
-- MLP training at layer 19 for 300 steps matches all exported tensors, the whitening matrix, firing statistics, and per-step and final numbers bit for bit. The release arguments and a one-batch dead window each cover 96 quantities.
-- Neither trainer reaches dead-unit auxiliary loss in 300 steps with release arguments. The short MLP dead window and a state optimizer step with injected dead groups cover it with bit-identical results.
-- Both original trainers are bit-deterministic across two runs each, permitting bit-identity comparisons. Gate-threshold results and the published manifest are regenerated.
-
-### What the comparisons do NOT show
-
-- The `statescope` command line was not used for the comparisons, which called the same library functions through test scripts. Of its subcommands only `verify` has been run on the release. Calibration and training subcommands accept Qwen3.5-0.8B only.
-- Full-length training over tens of millions of tokens was not repeated.
-- Trainer comparisons covered only layer 19 and seed 0. Budgets not divisible by the batch were not compared.
-- The layer 9 state dictionary used earlier versions of two source files absent from the frozen copy. Only reader-level tests cover it.
-- The Qwen3.5-4B configuration is outside this stage, despite the reader pilot.
+The earlier design used an untied state dictionary and an M1w MLP dictionary with 41,484 atoms. Its code and tests are on the branch `earlier-design`. It did not train these weights.
 
 ## License and credits
 
