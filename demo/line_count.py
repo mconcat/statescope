@@ -83,54 +83,61 @@ class Run:
         return self.post8 + self.mix9
 
 
-class Engine:
+def _first(out):
+    """the tensor of a module's output: a module returns either the tensor or a tuple that starts with it"""
+    return out[0] if isinstance(out, (tuple, list)) else out
+
+
+def _keep(got: dict[str, torch.Tensor], name: str) -> Callable:
+    """forward hook: store the module's output as got[name]; the output is not changed"""
+    def hook(module, args, out) -> None:
+        got[name] = _first(out)
+    return hook
+
+
+def _keep_input(got: dict[str, torch.Tensor], name: str) -> Callable:
+    """forward pre-hook (with keyword arguments): store the module's input as got[name]; the input is not changed"""
+    def hook(module, args, kwargs) -> None:
+        got[name] = args[0] if args else kwargs["hidden_states"]
+    return hook
+
+
+def _replace(got: dict[str, torch.Tensor], name: str, patch: Patch | None) -> Callable:
+    """forward hook: store the module's own output as got[name]; with a patch, the module then returns patch(output) instead"""
+    def hook(module, args, out):
+        t = _first(out)
+        got[name] = t
+        if patch is None:
+            return None
+        new = patch(t).to(t.dtype)                      # a patched tensor is rounded to the model's dtype, like the original
+        return (new, *out[1:]) if isinstance(out, (tuple, list)) else new
+    return hook
+
+
+class HookedModel:
+    """The language model with the handles the demonstration needs: its layers, the final norm and the mixer of layer 9.
+
+    run() is one forward pass over a batch. It keeps the tensors listed in `Run` (taken at layers 8 and 9 and after the final norm)
+    and can replace the output of layer 9's mixer or of layer 9's MLP on the way: a patch receives the module's own output and returns
+    the tensor to use instead; everything after that module is then computed from the replacement."""
+
     def __init__(self, lm: LanguageModel) -> None:
         self.lm = lm
         self.model, self.layers = lm.model, lm.layers
         self.final_norm = lm.model.model.norm
         self.mixer9 = self.layers[9].linear_attn
-        unembed = lm.model.get_output_embeddings().weight
-        text = [lm.tokenizer.decode([i]) for i in range(len(lm.tokenizer))]
-        self.token_text = text
-        self.newline = {i for i, s in enumerate(text) if ("\n" in s or "\r" in s) and s.strip() == ""}
-        space = [i for i, s in enumerate(text) if s.startswith(" ") and "\n" not in s and "\r" not in s]
-        self.W_newline, self.W_space = unembed[sorted(self.newline)].float(), unembed[space].float()
-
-    def margin(self, hidden: torch.Tensor) -> torch.Tensor:
-        """(B, T, d) final hidden states -> (B,) margin at the last token"""
-        h = hidden[:, -1].float()
-        return (h @ self.W_newline.T).logsumexp(1) - (h @ self.W_space.T).logsumexp(1)
 
     @torch.inference_mode()
     def run(self, ids: torch.Tensor, patch_mix9: Patch | None = None, patch_mlp9: Patch | None = None) -> Run:
         got: dict[str, torch.Tensor] = {}
-
-        def first(out):
-            return out[0] if isinstance(out, (tuple, list)) else out
-
-        def keep(name: str):
-            return lambda module, args, out: got.__setitem__(name, first(out))
-
-        def keep_input(name: str):
-            return lambda module, args, kwargs: got.__setitem__(name, args[0] if args else kwargs["hidden_states"])
-
-        def replace(name: str, patch: Patch | None):
-            def hook(module, args, out):
-                t = first(out)
-                got[name] = t
-                if patch is None:
-                    return None
-                new = patch(t).to(t.dtype)                      # a patched tensor is rounded to the model's dtype, like the original
-                return (new, *out[1:]) if isinstance(out, (tuple, list)) else new
-            return hook
-
         l8, l9 = self.layers[8], self.layers[9]
-        hooks = [l8.register_forward_pre_hook(keep_input("resid_in8"), with_kwargs=True),
-                 l8.linear_attn.register_forward_hook(keep("mix8")), l8.mlp.register_forward_hook(keep("mlp8")),
-                 l9.register_forward_pre_hook(keep_input("post8"), with_kwargs=True),
-                 l9.linear_attn.register_forward_pre_hook(keep_input("mixer_in9"), with_kwargs=True),
-                 l9.linear_attn.register_forward_hook(replace("mix9", patch_mix9)), l9.mlp.register_forward_hook(replace("mlp9", patch_mlp9)),
-                 self.final_norm.register_forward_hook(keep("hidden"))]
+        hooks = [l8.register_forward_pre_hook(_keep_input(got, "resid_in8"), with_kwargs=True),
+                 l8.linear_attn.register_forward_hook(_keep(got, "mix8")), l8.mlp.register_forward_hook(_keep(got, "mlp8")),
+                 l9.register_forward_pre_hook(_keep_input(got, "post8"), with_kwargs=True),
+                 l9.linear_attn.register_forward_pre_hook(_keep_input(got, "mixer_in9"), with_kwargs=True),
+                 l9.linear_attn.register_forward_hook(_replace(got, "mix9", patch_mix9)),
+                 l9.mlp.register_forward_hook(_replace(got, "mlp9", patch_mlp9)),
+                 self.final_norm.register_forward_hook(_keep(got, "hidden"))]
         try:
             self.model(input_ids=ids, use_cache=False, logits_to_keep=1)
         finally:
@@ -138,6 +145,24 @@ class Engine:
                 h.remove()
         return Run(got["hidden"], got["resid_in8"].float(), got["mix8"].float(), got["mlp8"].float(), got["post8"].float(),
                    got["mixer_in9"], got["mix9"].float(), got["mlp9"].float())
+
+
+class LineBreakScore:
+    """The score of the task, read from the final hidden state at the last token:
+    m = logsumexp(logits of line-break tokens) - logsumexp(logits of tokens that start with a space)."""
+
+    def __init__(self, lm: LanguageModel) -> None:
+        unembed = lm.model.get_output_embeddings().weight
+        text = [lm.tokenizer.decode([i]) for i in range(len(lm.tokenizer))]
+        self.token_text = text                                             # the text of every token of the vocabulary
+        self.newline = {i for i, s in enumerate(text) if ("\n" in s or "\r" in s) and s.strip() == ""}   # line-break tokens
+        space = [i for i, s in enumerate(text) if s.startswith(" ") and "\n" not in s and "\r" not in s]
+        self.W_newline, self.W_space = unembed[sorted(self.newline)].float(), unembed[space].float()        # their unembedding rows
+
+    def margin(self, hidden: torch.Tensor) -> torch.Tensor:
+        """(B, T, d) final hidden states -> (B,) margin at the last token"""
+        h = hidden[:, -1].float()
+        return (h @ self.W_newline.T).logsumexp(1) - (h @ self.W_space.T).logsumexp(1)
 
 
 # ---------------------------------------------------------------------------------------------- the L9 mixer (a Gated DeltaNet layer) by hand
@@ -220,7 +245,7 @@ def share(m_clean: torch.Tensor, m_patched: torch.Tensor, m_corrupt: torch.Tenso
     return [float(num.mean() / den.mean()), float(ratio.quantile(0.025)), float(ratio.quantile(0.975))]
 
 
-def token_labels(ids: torch.Tensor, engine: Engine) -> dict[str, torch.Tensor]:
+def token_labels(ids: torch.Tensor, score: LineBreakScore) -> dict[str, torch.Tensor]:
     """Per token of ids (B, T): chars = characters since the last line break, this token included; newline = is a line-break token;
     line_first = follows a line-break token; known = a line break has been seen (before that, chars counts from the text's start)."""
     out: dict[str, list] = {k: [] for k in ("chars", "newline", "line_first", "known")}
@@ -228,12 +253,12 @@ def token_labels(ids: torch.Tensor, engine: Engine) -> dict[str, torch.Tensor]:
         chars, seen, after_newline = 0, False, False
         r: dict[str, list] = {k: [] for k in out}
         for token in row:
-            s = engine.token_text[token]
+            s = score.token_text[token]
             if "\n" in s:
                 chars, seen = len(s) - s.rfind("\n") - 1, True
             else:
                 chars += len(s)
-            is_newline = token in engine.newline
+            is_newline = token in score.newline
             r["chars"].append(chars), r["newline"].append(is_newline), r["line_first"].append(after_newline), r["known"].append(seen)
             after_newline = is_newline
         for k in out:
@@ -256,10 +281,10 @@ def in_frame(frame: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 
 # ---------------------------------------------------------------------------------------------- the measurement
 @torch.inference_mode()
-def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt, vocab8: StateVocab,
-            vocab9: StateVocab) -> tuple[dict, dict]:
-    device = engine.lm.device
-    mixer9, site8 = engine.mixer9, "resid_post.8"
+def measure(model: HookedModel, score: LineBreakScore, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt,
+            vocab8: StateVocab, vocab9: StateVocab) -> tuple[dict, dict]:
+    device = model.lm.device
+    mixer9, site8 = model.mixer9, "resid_post.8"
     head_columns = mixer9.out_proj.weight[:, HEAD * mixer9.head_v_dim:(HEAD + 1) * mixer9.head_v_dim].float()
     frame, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
     generator = torch.Generator().manual_seed(0)
@@ -277,19 +302,19 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
             ids = items[f"{cell}/ids"][s:s + BATCH].long().to(device)
             corrupt_ids = items[f"{cell}/cor"][s:s + BATCH].long().to(device)
             pairing = items[f"{cell}/pi"][s:s + BATCH].long().to(device)
-            c, x = engine.run(ids), engine.run(corrupt_ids)
+            c, x = model.run(ids), model.run(corrupt_ids)
             B, T, d = c.post8.shape
-            add(cell, "m_c", engine.margin(c.hidden))
-            add(cell, "m_x", engine.margin(x.hidden))
+            add(cell, "m_c", score.margin(c.hidden))
+            add(cell, "m_x", score.margin(x.hidden))
 
             def swap(corrupt: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:
                 return onto_clean(corrupt, clean, pairing) - clean
 
             def with_mix9(new: torch.Tensor, arm: str) -> None:
-                add(cell, arm, engine.margin(engine.run(ids, patch_mix9=lambda t: new).hidden))
+                add(cell, arm, score.margin(model.run(ids, patch_mix9=lambda t: new).hidden))
 
             def with_mlp9(new: torch.Tensor, arm: str) -> None:
-                add(cell, arm, engine.margin(engine.run(ids, patch_mlp9=lambda t: new).hidden))
+                add(cell, arm, score.margin(model.run(ids, patch_mlp9=lambda t: new).hidden))
 
             # ---- the L9 mixer: its whole output swapped; only head 10's read swapped
             with_mix9(onto_clean(x.mix9, c.mix9, pairing), "layer_y")
@@ -300,7 +325,7 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
 
             # ---- a change of resid_post.8, sent through the model's own L9 mixer only (the residual's direct path stays clean)
             def mixer9_of(post8: torch.Tensor) -> torch.Tensor:
-                seen = engine.layers[9].input_layernorm(post8.to(c.mixer_in9.dtype))
+                seen = model.layers[9].input_layernorm(post8.to(c.mixer_in9.dtype))
                 return gdn_output(mixer9, gdn_inputs(mixer9, seen)).float()
 
             mixer9_clean = mixer9_of(c.post8)
@@ -364,7 +389,7 @@ def measure(engine: Engine, items: dict[str, torch.Tensor], molt8: PublicMolt, m
 
             gates["l8"].append(gate8_c[:, [L8_TRANSFORM]].view(B, T, -1).cpu())
             gates["l9"].append(gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1).cpu())
-            for k, v in token_labels(ids, engine).items():
+            for k, v in token_labels(ids, score).items():
                 labels.setdefault(k, []).append(v)
             print(f"{cell}: items {s}-{s + B - 1} done", flush=True)
 
@@ -444,12 +469,13 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="folder for result.json (shares, firing rates) and result.safetensors (per-item margins, gates)")
     args = ap.parse_args()
     spec = dataclasses.replace(MODELS["qwen3.5-0.8b"], hf_id=args.model)
-    engine = Engine(load_language_model(spec, device=args.device))
+    lm = load_language_model(spec, device=args.device)
+    model, score = HookedModel(lm), LineBreakScore(lm)
     molt8 = PublicMolt(os.path.join(args.release, "mlp", "L8"), device=args.device)
     molt9 = PublicMolt(os.path.join(args.release, "mlp", "L9"), device=args.device)
     vocab8 = StateVocab(os.path.join(args.release, "state", "L8"), device=args.device)
     vocab9 = StateVocab(os.path.join(args.release, "state", "L9"), device=args.device)
-    tensors, info = measure(engine, load_file(args.items), molt8, molt9, vocab8, vocab9)
+    tensors, info = measure(model, score, load_file(args.items), molt8, molt9, vocab8, vocab9)
     result = summarize(tensors, info)
     print_summary(result)
     if args.out is not None:
