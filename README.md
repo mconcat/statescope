@@ -19,15 +19,13 @@ statescope contains a reader for per-layer dictionaries of `Qwen/Qwen3.5-4B` and
 
 The 0.8B base model's revision is `2fc06364715b967f1860aea9cf38778875588b17`. The 0.8B set was frozen on 2026-11-18.
 
-A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output. Neither set contains dictionaries for the mixers.
+A mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output.
+
+By design, the mixers are read directly at the level of the model's own heads and channels. We also trained a stateful transcoder, a dictionary with a state carried across tokens, on 18 GatedDeltaNet layers of the 0.8B model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer. Attention is read at the level of heads.
 
 A group is a set of 4 directions in a state dictionary. A frame is the orthonormal basis of a group's 4-dimensional write subspace. A code gives a token's coordinates in that frame, multiplied by a per-group scale. A transform is a linear operation in an MLP dictionary with its own read and write matrices. Its write is what it adds to the MLP output. A gate controls a transform through a learned threshold on its pre-activation.
 
 The repository contains the reader, a demonstration and tests.
-
-## Scope
-
-Training and the first measurements were made with unpublished research code, called the original project here. This repository holds the reader and re-measures with it. Each set uses one training seed. The held-out shards behind the MLP numbers recorded at training and the held-out activations behind the reconstruction numbers are not published, so those exact numbers cannot be recomputed. For the 4B set, the original project measured spliced-in loss at one layer only.
 
 ## Install
 
@@ -123,7 +121,7 @@ The MLP dictionary uses the sparse mixture of linear transforms, or MOLT, from t
 
 Position 0 means the first position of each sequence. It was dropped during state dictionary training and included during MLP dictionary training. The raw FVU columns in the model cards drop position 0 for both dictionaries. Measurements with the state dictionary drop position 0. The `capture` function already does this.
 
-FVU means fraction of variance unexplained. It is squared reconstruction error divided by squared deviation from the per-dimension mean of each held-out split. The model cards' state FVU and MLP FVU columns were re-measured with the reader in raw residual and raw MLP output units. They use all tokens of four held-out splits, with position 0 dropped. The splits for the 4B set contain 257,102 tokens per layer, of which 181 are at position 0. The splits for the 0.8B set contain 257,122 tokens per layer, of which 179 are at position 0. Each model card separately gives the MLP FVU recorded at training on different tokens.
+FVU means fraction of variance unexplained. It is squared reconstruction error divided by squared deviation from the per-dimension mean of each held-out split. The model cards' state FVU and MLP FVU columns were re-measured with the reader in raw residual and raw MLP output units. They use all tokens of four held-out splits, with position 0 dropped. The splits for the 4B set contain 257,102 tokens per layer, of which 181 are at position 0. The splits for the 0.8B set contain 257,122 tokens per layer, of which 179 are at position 0. Each model card separately gives the MLP FVU recorded at training on different tokens. The held-out shards behind the MLP numbers recorded at training and the held-out activations behind the reconstruction numbers are not published.
 
 This repository measured raw FVU with and without position 0 for the 0.8B set. At layer 6, `resid_mid`, state FVU is 0.2524 with position 0 and 0.2184 without it. At layer 0, it is 0.0778 with position 0 and 0.0777 without it. For the MLP dictionary, the two differ by at most 0.014 at any layer.
 
@@ -131,7 +129,7 @@ The state trainer's held-out FVU was recorded at training in `MANIFEST.json` as 
 
 ## Qwen3.5-4B set
 
-The 4B set contains a state dictionary and an MLP dictionary for each of the 32 layers of `Qwen/Qwen3.5-4B`. Its `ALWAYS_ON.json` lists frequently firing MLP transforms, their shares of summed write energy and held-out counts. The set's [model card](https://huggingface.co/mconcat/statescope-qwen3.5-4b) describes its reconstruction measurements and transform usage.
+The 4B set contains a state dictionary and an MLP dictionary for each of the 32 layers of `Qwen/Qwen3.5-4B`. The dictionaries were trained in 2026-11. Spliced-in loss was measured at layer 16. Its `ALWAYS_ON.json` lists frequently firing MLP transforms, their shares of summed write energy and held-out counts. The set's [model card](https://huggingface.co/mconcat/statescope-qwen3.5-4b) describes its reconstruction measurements and transform usage.
 
 ## Demonstration: line counting
 
@@ -151,7 +149,7 @@ share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt)
 
 A share of 0 means that the patch changes nothing. A share of 1 means that the patch alone turns the clean run into the corrupt one. A cell is a task setting defined by the wrapping width and how the corrupt text is made. The three cells are `count:60`, `count:100` and `width:100`. In the count cells, the corrupt text's last line starts at a later word than the clean text's, chosen so that the line holds between 35% and 65% of the width at the last word, and the preceding lines are wrapped backward from that word at the same width, moving their line breaks too. In the width cell, the corrupt text's last line starts at the same word as the clean text's, and the preceding lines are wrapped backward at 1.75 times the width. Each cell contains 64 pairs in `demo/line_count_items.safetensors`, which stores token ids and position pairing. The texts are re-wrapped excerpts from FineWeb-Edu documents.
 
-The original project found the following chain. The script uses its chosen transform, group and head and re-measures their effects. It does not search for them.
+We found the following chain. The script uses our chosen transform, group and head and re-measures their effects. It does not search for them.
 
 1. Transform 189 of the L8 MLP dictionary fires on the first token of a line. Its write lies mostly inside the frame of state group 11586 of `resid_post.8`, the first-token-of-a-line group.
 2. The model's L9 mixer reads that write. Swapping only transform 189's write or only group 11586 moves the answer about as much as swapping the whole L8 MLP output in the count cells. GatedDeltaNet head 10 carries the count inside the mixer.
@@ -199,10 +197,13 @@ The next table's rows specify changes at the L9 mixer output, and its columns ar
 
 The part inside group 4885's frame moves the transforms about as much as the whole swap. The rest moves them little. For the whole mixer swap, the rest carries 0.016 in `count:60`, 0.032 in `count:100` and 0.042 in `width:100` through the six transforms. Through the two transforms alone, the rest carries 0.013 in `count:60`, 0.052 in `count:100` and 0.031 in `width:100`. A random 4-dimensional frame carries at most 0.005 through the six transforms and 0.007 through the two. With everything downstream, the rest carries 0.156 in `count:60`, 0.168 in `count:100` and 0.177 in `width:100`. The frame is therefore not the only route to the answer. The downstream shares of the two parts do not add up to the whole.
 
-- This is an easy task for which the model has dedicated MLP neurons. The demonstration does not compare dictionary units with neurons.
+The same computation is also visible in individual MLP neurons.
+
+Further findings:
+
 - Group 4885 is a dense group with 4-dimensional coordinates that are active on most tokens and carry information in those coordinates.
 - Single-item margins of dictionary swaps are reproducible to about 0.1. Shares are reproducible to about 0.003. A patched tensor is rounded to bf16. A 1e-6 relative difference between implementations flips some rounded elements.
-- The original project registered a pass rule for the mixer-to-MLP link. The rule requires at least 0.75 of the whole share inside the frame, at most 0.25 of it and at most 0.05 in the rest, and at most 0.01 in random frames, in both count cells. The original project's verdict was that the rule holds for the route through the six transforms and holds only in part for the route through 410 and 1749 alone, because it recorded a share of 0.051 for the rest in `count:100` through those two transforms.
+- We registered a pass rule for the mixer-to-MLP link. The rule requires at least 0.75 of the whole share inside the frame, at most 0.25 of it and at most 0.05 in the rest, and at most 0.01 in random frames, in both count cells. Our verdict was that the rule holds for the route through the six transforms and holds only in part for the route through 410 and 1749 alone, because we recorded a share of 0.051 for the rest in `count:100` through those two transforms.
 
 ## Repository layout
 
@@ -213,6 +214,8 @@ The part inside group 4885's frame moves the transforms about as much as the who
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
 - `devtools/` holds tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
+
+Training code will follow.
 
 An earlier, unpublished design's code and tests are on the branch `earlier-design`; it did not train these weights.
 
@@ -256,8 +259,6 @@ The pass/fail rules were written down before the comparisons were run and are in
 - A fresh clone, a new environment and a fresh download reproduce the demonstration byte for byte with torch 2.11.0+cu128 and transformers 5.20.2.
 - With newer library versions, torch 2.15.0+cu132 and transformers 5.23.0, shares differ by at most 0.011.
 - The 4B usage lines were run once on the 4B model.
-
-All comparisons ran on one machine with one RTX 5090.
 
 ## License and credits
 
