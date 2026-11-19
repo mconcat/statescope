@@ -103,6 +103,7 @@ def test_shares(reference, demo) -> None:
 
 
 LINK_RECORD = "true_mixer_link.json"   # the original project's result file of the group-4885 link, measured after snapshot 3 was frozen
+LINK_RECORD_SHA256 = "56a2bec724743b5449ff57f5c8315895527485dda60d2df57891e71837cab9c3"   # the file is not in a snapshot: a rerun by the original project must not move the comparison unnoticed
 LINK_NAMES = {"full": "full", "g4885": "proj_g4885", "minus_g4885": "minus_g4885"}
 
 
@@ -113,6 +114,8 @@ def _recorded(settings: Settings) -> dict[str, dict[str, dict[str, float]]]:
     link_file = settings.need_legacy_results() / "demo_line_count" / LINK_RECORD
     if not link_file.is_file():
         pytest.fail(f"the original project's record of the group-4885 link is missing: {link_file}", pytrace=False)
+    if hashlib.sha256(link_file.read_bytes()).hexdigest() != LINK_RECORD_SHA256:
+        pytest.fail(f"{link_file} is not the file the link arms were first compared with (sha256 differs)", pytrace=False)
     link = json.loads(link_file.read_text())
     out: dict[str, dict[str, dict[str, float]]] = {}
     for cell in CELLS:

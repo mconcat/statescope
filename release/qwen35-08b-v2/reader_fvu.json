@@ -1,0 +1,395 @@
+{
+ "what": "FVU in raw units on all held-out tokens of the original project's four held-out splits per layer, read with statescope.reader",
+ "splits": [
+  "pile",
+  "ultra",
+  "cont",
+  "chat"
+ ],
+ "layers": {
+  "0": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.0": {
+    "position_0_dropped": 0.07766795010763618,
+    "with_position_0": 0.07781623545041089
+   },
+   "resid_post.0": {
+    "position_0_dropped": 0.08575695758738064,
+    "with_position_0": 0.08615400089586812
+   },
+   "mlp": {
+    "position_0_dropped": 0.08789780960896544,
+    "with_position_0": 0.08781098866399933
+   }
+  },
+  "1": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.1": {
+    "position_0_dropped": 0.11530850414300274,
+    "with_position_0": 0.11590084427792226
+   },
+   "resid_post.1": {
+    "position_0_dropped": 0.1317286532580537,
+    "with_position_0": 0.13227891330235053
+   },
+   "mlp": {
+    "position_0_dropped": 0.16266842604064702,
+    "with_position_0": 0.1625992099103704
+   }
+  },
+  "2": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.2": {
+    "position_0_dropped": 0.16173906400532523,
+    "with_position_0": 0.1621410048380477
+   },
+   "resid_post.2": {
+    "position_0_dropped": 0.14776157063387896,
+    "with_position_0": 0.14817852713094123
+   },
+   "mlp": {
+    "position_0_dropped": 0.14808100181179684,
+    "with_position_0": 0.1479392817373331
+   }
+  },
+  "3": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.3": {
+    "position_0_dropped": 0.17095387108553087,
+    "with_position_0": 0.17142148607521215
+   },
+   "resid_post.3": {
+    "position_0_dropped": 0.16661972059068184,
+    "with_position_0": 0.16762344897805712
+   },
+   "mlp": {
+    "position_0_dropped": 0.1734343950739359,
+    "with_position_0": 0.17280447701087404
+   }
+  },
+  "4": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.4": {
+    "position_0_dropped": 0.18994019528663483,
+    "with_position_0": 0.19145098485170406
+   },
+   "resid_post.4": {
+    "position_0_dropped": 0.17034197920608,
+    "with_position_0": 0.17191953942245045
+   },
+   "mlp": {
+    "position_0_dropped": 0.1632860355094048,
+    "with_position_0": 0.16323209835676206
+   }
+  },
+  "5": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.5": {
+    "position_0_dropped": 0.1956295736088371,
+    "with_position_0": 0.1970605150019893
+   },
+   "resid_post.5": {
+    "position_0_dropped": 0.1835932034848466,
+    "with_position_0": 0.1852633617611327
+   },
+   "mlp": {
+    "position_0_dropped": 0.18120739487295273,
+    "with_position_0": 0.18110355462271321
+   }
+  },
+  "6": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.6": {
+    "position_0_dropped": 0.2183639785147934,
+    "with_position_0": 0.252434864993898
+   },
+   "resid_post.6": {
+    "position_0_dropped": 0.21324152528484192,
+    "with_position_0": 0.24484457454802563
+   },
+   "mlp": {
+    "position_0_dropped": 0.19606805383670767,
+    "with_position_0": 0.19588613480471584
+   }
+  },
+  "7": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.7": {
+    "position_0_dropped": 0.24025096236533217,
+    "with_position_0": 0.24942559639229345
+   },
+   "resid_post.7": {
+    "position_0_dropped": 0.22160209196676878,
+    "with_position_0": 0.22907107485114342
+   },
+   "mlp": {
+    "position_0_dropped": 0.19080467662534725,
+    "with_position_0": 0.19012097196193847
+   }
+  },
+  "8": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.8": {
+    "position_0_dropped": 0.2389944788332094,
+    "with_position_0": 0.2445113263045758
+   },
+   "resid_post.8": {
+    "position_0_dropped": 0.22700399240989974,
+    "with_position_0": 0.23295611661376425
+   },
+   "mlp": {
+    "position_0_dropped": 0.21336704417122282,
+    "with_position_0": 0.2131844832201453
+   }
+  },
+  "9": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.9": {
+    "position_0_dropped": 0.24907879594321072,
+    "with_position_0": 0.25875454047347524
+   },
+   "resid_post.9": {
+    "position_0_dropped": 0.2380450403175654,
+    "with_position_0": 0.24833061142679835
+   },
+   "mlp": {
+    "position_0_dropped": 0.22428347514943614,
+    "with_position_0": 0.22414389765763168
+   }
+  },
+  "10": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.10": {
+    "position_0_dropped": 0.25759530598674635,
+    "with_position_0": 0.26500837927650894
+   },
+   "resid_post.10": {
+    "position_0_dropped": 0.2416405414237015,
+    "with_position_0": 0.24967949097304995
+   },
+   "mlp": {
+    "position_0_dropped": 0.19750125673461633,
+    "with_position_0": 0.19724847505293158
+   }
+  },
+  "11": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.11": {
+    "position_0_dropped": 0.2713233714451801,
+    "with_position_0": 0.273401089701934
+   },
+   "resid_post.11": {
+    "position_0_dropped": 0.25205667383333713,
+    "with_position_0": 0.25340641791148955
+   },
+   "mlp": {
+    "position_0_dropped": 0.18630936127739608,
+    "with_position_0": 0.1856814393159442
+   }
+  },
+  "12": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.12": {
+    "position_0_dropped": 0.2633921244355462,
+    "with_position_0": 0.2646627518797248
+   },
+   "resid_post.12": {
+    "position_0_dropped": 0.24722499004120935,
+    "with_position_0": 0.24805970269430894
+   },
+   "mlp": {
+    "position_0_dropped": 0.19730514647344283,
+    "with_position_0": 0.1970575995662026
+   }
+  },
+  "13": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.13": {
+    "position_0_dropped": 0.25902375962102797,
+    "with_position_0": 0.25969501787391397
+   },
+   "resid_post.13": {
+    "position_0_dropped": 0.24717126350252833,
+    "with_position_0": 0.2477853233940551
+   },
+   "mlp": {
+    "position_0_dropped": 0.18827831348909552,
+    "with_position_0": 0.18812281332401923
+   }
+  },
+  "14": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.14": {
+    "position_0_dropped": 0.2624942607480127,
+    "with_position_0": 0.2631347177182279
+   },
+   "resid_post.14": {
+    "position_0_dropped": 0.23951933647178353,
+    "with_position_0": 0.2575935139233819
+   },
+   "mlp": {
+    "position_0_dropped": 0.14057208447889363,
+    "with_position_0": 0.1261993771232665
+   }
+  },
+  "15": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.15": {
+    "position_0_dropped": 0.2622651466957777,
+    "with_position_0": 0.2625805696405144
+   },
+   "resid_post.15": {
+    "position_0_dropped": 0.23189531704159597,
+    "with_position_0": 0.23217911100297894
+   },
+   "mlp": {
+    "position_0_dropped": 0.12888290634969157,
+    "with_position_0": 0.12882926936547112
+   }
+  },
+  "16": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.16": {
+    "position_0_dropped": 0.22931549602359755,
+    "with_position_0": 0.22955530262763624
+   },
+   "resid_post.16": {
+    "position_0_dropped": 0.21960084707610628,
+    "with_position_0": 0.21981210902834789
+   },
+   "mlp": {
+    "position_0_dropped": 0.15569268508637843,
+    "with_position_0": 0.15565558672022214
+   }
+  },
+  "17": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.17": {
+    "position_0_dropped": 0.21674246993726654,
+    "with_position_0": 0.21694423734572393
+   },
+   "resid_post.17": {
+    "position_0_dropped": 0.21306451013181613,
+    "with_position_0": 0.21325886562472343
+   },
+   "mlp": {
+    "position_0_dropped": 0.16503116009377536,
+    "with_position_0": 0.16497882836560795
+   }
+  },
+  "18": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.18": {
+    "position_0_dropped": 0.21320208504557117,
+    "with_position_0": 0.21336699132913772
+   },
+   "resid_post.18": {
+    "position_0_dropped": 0.20532961953251933,
+    "with_position_0": 0.2054875357319975
+   },
+   "mlp": {
+    "position_0_dropped": 0.13939031922267156,
+    "with_position_0": 0.13926160547776917
+   }
+  },
+  "19": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.19": {
+    "position_0_dropped": 0.22593855328461915,
+    "with_position_0": 0.22603034697957208
+   },
+   "resid_post.19": {
+    "position_0_dropped": 0.22272684811258314,
+    "with_position_0": 0.2228092126911905
+   },
+   "mlp": {
+    "position_0_dropped": 0.14547372200067826,
+    "with_position_0": 0.14541112873074416
+   }
+  },
+  "20": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.20": {
+    "position_0_dropped": 0.21655739509461605,
+    "with_position_0": 0.21662887342054
+   },
+   "resid_post.20": {
+    "position_0_dropped": 0.2216441812422455,
+    "with_position_0": 0.2217234681342591
+   },
+   "mlp": {
+    "position_0_dropped": 0.1617963195811862,
+    "with_position_0": 0.1617204339133144
+   }
+  },
+  "21": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.21": {
+    "position_0_dropped": 0.22492761277964382,
+    "with_position_0": 0.2250189166701303
+   },
+   "resid_post.21": {
+    "position_0_dropped": 0.23273363574617606,
+    "with_position_0": 0.23283232813473245
+   },
+   "mlp": {
+    "position_0_dropped": 0.16019391254703141,
+    "with_position_0": 0.16008322038636513
+   }
+  },
+  "22": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.22": {
+    "position_0_dropped": 0.24016662876165357,
+    "with_position_0": 0.24026560746098943
+   },
+   "resid_post.22": {
+    "position_0_dropped": 0.25178809650725636,
+    "with_position_0": 0.2519065820215979
+   },
+   "mlp": {
+    "position_0_dropped": 0.1385499389923493,
+    "with_position_0": 0.1384207984543009
+   }
+  },
+  "23": {
+   "tokens": 257122,
+   "position_0_tokens": 179,
+   "resid_mid.23": {
+    "position_0_dropped": 0.26135877775743854,
+    "with_position_0": 0.2618594351919604
+   },
+   "resid_post.23": {
+    "position_0_dropped": 0.24039537307187253,
+    "with_position_0": 0.24072902005343313
+   },
+   "mlp": {
+    "position_0_dropped": 0.024580734504287487,
+    "with_position_0": 0.024564466014111185
+   }
+  }
+ }
+}

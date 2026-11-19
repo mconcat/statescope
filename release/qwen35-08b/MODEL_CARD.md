@@ -5,6 +5,9 @@ base_model: Qwen/Qwen3.5-0.8B
 
 # Qwen3.5-0.8B per-layer dictionaries
 
+> This card describes the EARLIER design (untied state dictionary, MLP dictionary M1w). Its weights are not the published set.
+> The card of the published set is [release/qwen35-08b-v2/MODEL_CARD.md](../qwen35-08b-v2/MODEL_CARD.md).
+
 ## What this is
 
 This release contains per-layer dictionaries of the language model `Qwen/Qwen3.5-0.8B`. A **state dictionary**, read by `StateVocab`, reconstructs residual-stream activations from selected **groups**, which are sets of write directions with vectors of coefficients called codes. A **multilayer perceptron (MLP) dictionary**, read by `MoltOps`, approximates the MLP output with gated low-rank linear maps called **atoms**. The state and MLP dictionaries were trained separately at each layer.

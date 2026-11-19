@@ -12,7 +12,7 @@ import pytest
 import torch
 from safetensors import safe_open
 
-from conftest import TEST_OUT, Settings
+from conftest import REPO, TEST_OUT, Settings
 from statescope.config import MODELS
 from statescope.reader import PublicMolt, write_post_norm
 from test_reader2 import check_molt_reader
@@ -77,6 +77,46 @@ def test_layer_23(settings: Settings, device: str) -> None:
         assert torch.equal(a.get_tensor("w_eff"), b.get_tensor("w_eff"))                 # R8.4
         assert float(a.metadata()["eps"]) == float(b.metadata()["eps"])
     check_molt_reader(23, settings, device, folder, folder / "postnorm.safetensors", "molt_release")   # R8.3, R8.5
+
+
+def test_configs_hold_the_documented_training_facts(settings: Settings) -> None:
+    """R8.8 (c): what the documents say about "each layer" is in every layer's config"""
+    import copy
+
+    import yaml
+    root = settings.need_release2()
+    reference = None
+    for layer in LAYERS:
+        cfg = json.loads((root / "state" / f"L{layer}" / "cfg.json").read_text())
+        facts = (cfg["tokens"], cfg["steps"], cfg["n_units"], cfg["unit_size"], cfg["k_topk"], cfg["form"], cfg["input"], cfg["rms_eps"], cfg["init_seed"])
+        assert facts == (30003200, 7325, 16384, 4, 24, "bsf", "token_rms", 1e-06, 0), layer
+        config = yaml.safe_load((root / "mlp" / f"L{layer}" / "config.yaml").read_text())
+        assert config["model"]["init_args"]["layer"] == layer and config["trainer"]["logger"]["init_args"]["name"] == f"L{layer}"
+        assert config["model"]["init_args"]["lambda_sparsity"] == (2.5e-05 if layer == 23 else 7.5e-05), layer
+        rest = copy.deepcopy(config)
+        del rest["model"]["init_args"]["layer"], rest["model"]["init_args"]["lambda_sparsity"], rest["trainer"]["logger"]["init_args"]["name"]
+        reference = reference or rest
+        assert rest == reference, f"layer {layer}: the MLP config differs from layer 0 in more than layer, logger name and penalty"
+    assert (reference["trainer"]["max_steps"], reference["data"]["init_args"]["batch_size"], reference["model"]["init_args"]["learning_rate"]) == (58600, 500, 4.0e-05)
+
+
+def test_reader_fvu_on_all_heldout_tokens(settings: Settings) -> None:
+    """R8.8 (a), (b): the numbers of release/qwen35-08b-v2/reader_fvu.json (devtools/measure_release2.py) against the original's table"""
+    measured = json.loads((REPO / "release" / "qwen35-08b-v2" / "reader_fvu.json").read_text())["layers"]
+    table = json.loads((settings.need_legacy_results() / "mlp_track" / "q08c" / "train1" / "table.json").read_text())
+    worst = 0.0
+    for layer in LAYERS:
+        mine, theirs = measured[str(layer)], table[str(layer)]
+        for site, key in ((f"resid_mid.{layer}", "mid"), (f"resid_post.{layer}", "post")):
+            for which, column in (("position_0_dropped", f"raw_{key}"), ("with_position_0", f"raw_with_pos0_{key}")):
+                diff = abs(mine[site][which] - theirs[column])
+                worst = max(worst, diff)
+                assert diff <= 1e-4, (layer, site, which, mine[site][which], theirs[column])
+        for which in ("position_0_dropped", "with_position_0"):
+            assert 0.0 < mine["mlp"][which] < 1.0, (layer, which)
+    MEASURED = TEST_OUT / "measured" / "release2"
+    MEASURED.mkdir(parents=True, exist_ok=True)
+    (MEASURED / "reader_fvu_vs_table.json").write_text(json.dumps({"largest_difference": worst, "limit": 1e-4}) + "\n")
 
 
 def test_no_private_paths(settings: Settings) -> None:

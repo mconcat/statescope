@@ -56,15 +56,15 @@ def measure_layer(layer: int, release: Path, calib: Path, device: str) -> dict:
     acc = {name: {"position_0_dropped": Fvu(), "with_position_0": Fvu()} for name in (*sites, "mlp")}
     n_tokens = n_position_0 = 0
     for split in HELDOUT_SPLITS:
-        x, y, pos = load_split(calib / f"heldout_{split}")
-        x, y, keep = x.to(device), y.to(device), (pos > 0).to(device)
+        x, y, pos = load_split(calib / f"heldout_{split}")           # kept on the CPU; one batch at a time goes to the device
+        keep = pos > 0
         n_tokens, n_position_0 = n_tokens + x.shape[0], n_position_0 + int((~keep).sum())
         estimates = {sites[0]: [], sites[1]: [], "mlp": []}
         for s in range(0, x.shape[0], BATCH):
-            xb, yb = x[s:s + BATCH], y[s:s + BATCH]
-            estimates[sites[0]].append(vocab.reconstruct(xb, sites[0]))
-            estimates[sites[1]].append(vocab.reconstruct(xb + yb, sites[1]))
-            estimates["mlp"].append(molt.forward(xb)[1])
+            xb, yb = x[s:s + BATCH].to(device), y[s:s + BATCH].to(device)
+            estimates[sites[0]].append(vocab.reconstruct(xb, sites[0]).cpu())
+            estimates[sites[1]].append(vocab.reconstruct(xb + yb, sites[1]).cpu())
+            estimates["mlp"].append(molt.forward(xb)[1].cpu())
         targets = {sites[0]: x, sites[1]: x + y, "mlp": y}
         for name, target in targets.items():
             estimate = torch.cat(estimates[name])

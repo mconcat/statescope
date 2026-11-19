@@ -1,6 +1,6 @@
-"""Markdown tables of the frozen 0.8B set for the model card, from the staged MANIFEST.json and a result of demo/line_count.py.
-Also copies the manifest into release/qwen35-08b-v2/ (the copy the repository carries). Every number in the two tables comes from
-those two files; nothing is typed by hand.
+"""Markdown tables of the frozen 0.8B set for the model card, from the staged MANIFEST.json, release/qwen35-08b-v2/reader_fvu.json
+(devtools/measure_release2.py) and a result of demo/line_count.py. Also copies the manifest into release/qwen35-08b-v2/ (the copy
+the repository carries). Every number in the tables comes from those three files; nothing is typed by hand.
 
     python devtools/make_release2_tables.py --release release_stage2 --demo-result <folder with result.json>
 """
@@ -20,14 +20,15 @@ ROWS = [("L9 mixer, whole output", "layer_y"), ("L9 mixer, head 10 only", "head_
         ("L9 MLP dictionary, all transforms", "l9/molt9_all"), ("L9 transform 410", "l9/t410"), ("L9 transform 1749", "l9/t1749")]
 
 
-def layer_table(manifest: dict) -> str:
-    lines = ["| Layer | State FVU, `resid_mid` | State FVU, `resid_post` | MLP FVU | MLP transforms on per token | MLP transforms alive | MLP penalty |",
-             "|---|---|---|---|---|---|---|"]
+def layer_table(manifest: dict, reader_fvu: dict) -> str:
+    """state and first MLP column: this repository's reader on all held-out tokens, raw units, position 0 dropped (reader_fvu.json);
+    the other MLP columns: recorded by the original project at training time (manifest)"""
+    lines = ["| Layer | State FVU, `resid_mid` | State FVU, `resid_post` | MLP FVU | MLP FVU recorded at training | MLP transforms on per token | "
+             "MLP transforms alive | MLP penalty |", "|---|---|---|---|---|---|---|---|"]
     for layer, e in manifest["layers"].items():
-        s, m = e["state"], e["mlp"]
-        fvu = s["heldout_fvu_own_units"]
-        lines.append(f"| {layer} | {fvu[f'resid_mid.{layer}']:.4f} | {fvu[f'resid_post.{layer}']:.4f} | {m['heldout_fvu']:.4f} | "
-                     f"{m['heldout_l0']:.1f} | {m['alive']} of {m['transforms']} | {m['penalty']:g} |")
+        m, r = e["mlp"], reader_fvu["layers"][layer]
+        lines.append(f"| {layer} | {r[f'resid_mid.{layer}']['position_0_dropped']:.4f} | {r[f'resid_post.{layer}']['position_0_dropped']:.4f} | "
+                     f"{r['mlp']['position_0_dropped']:.4f} | {m['heldout_fvu']:.4f} | {m['heldout_l0']:.1f} | {m['alive']} of {m['transforms']} | {m['penalty']:g} |")
     return "\n".join(lines)
 
 
@@ -68,7 +69,8 @@ def main() -> None:
     result = json.loads((args.demo_result / "result.json").read_text())
     DEST.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(args.release / "MANIFEST.json", DEST / "MANIFEST.json")
-    (DEST / "layers_table.md").write_text(layer_table(manifest) + "\n")
+    reader_fvu = json.loads((DEST / "reader_fvu.json").read_text())          # written by devtools/measure_release2.py
+    (DEST / "layers_table.md").write_text(layer_table(manifest, reader_fvu) + "\n")
     (DEST / "line_count_table.md").write_text(demo_table(result) + "\n")
     (DEST / "line_count_link_table.md").write_text(link_table(result) + "\n")
     print(f"wrote MANIFEST.json, layers_table.md, line_count_table.md and line_count_link_table.md to {DEST}")

@@ -1,5 +1,8 @@
 """Read one layer of Qwen3.5-0.8B with its two dictionaries and print how well they reconstruct a few texts.
 
+This example reads the EARLIER design (folders layers/Lxx/{vocab,molt}, MoltOps). For the published set (state/L<L>, mlp/L<L>,
+PublicMolt) see the README's quick start and demo/line_count.py.
+
     python examples/reconstruct_texts.py --layer 19 --root <release folder> [--model Qwen/Qwen3.5-0.8B] [--device cuda]
 
 Needs torch, safetensors, transformers and flash-linear-attention (without it transformers runs a slow reference GatedDeltaNet).
