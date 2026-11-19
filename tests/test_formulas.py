@@ -376,9 +376,13 @@ class _ToyLM(torch.nn.Module):
 
     def __init__(self, vocab_size: int = 50, d: int = 6, n_layers: int = 3, fail_after_layer: int | None = None) -> None:
         super().__init__()
-        torch.manual_seed(0)
         self.model = _ToyDecoder(vocab_size, d, n_layers)
         self.fail_after_layer = fail_after_layer
+        g = torch.Generator().manual_seed(0)                                  # fixed weights without reseeding the process-wide generator
+        with torch.no_grad():
+            for name, parameter in self.model.named_parameters():
+                if not name.endswith("post_attention_layernorm.weight"):      # the norms have their own fixed weights
+                    parameter.copy_(0.5 * torch.randn(parameter.shape, generator=g))
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
         x = self.model.embed(input_ids)
