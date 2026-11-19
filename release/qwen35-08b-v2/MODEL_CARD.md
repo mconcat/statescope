@@ -189,7 +189,7 @@ The margin is the last-token logsumexp of newline-token logits minus the logsume
 
 A cell is a task setting defined by the wrapping width and the change that makes the corrupt text. The cells are `count:60`, `count:100` and `width:100`. The count cells move the last line break, while the width cell wraps all lines wider. Each contains 64 pairs stored as token ids and position pairing in `demo/line_count_items.safetensors`. These are re-wrapped FineWeb-Edu excerpts.
 
-The original project found the chain. It chose the transform, group and head on odd-numbered items. The script takes those choices as given and re-measures them. It does not search for them. The results below use the separate even-numbered half, with 32 items per cell.
+The original project found the chain. The script takes its choice of transform, group and head as given and re-measures them. It does not search for them. The original project ranked transforms on the odd-numbered items and reads results on the even-numbered ones. Some groups were first chosen after looking at all items; when the original project repeated the selection on odd-numbered items only, the chosen groups, frames and transforms were the same. Head 10 was known from earlier work. The results below use the even-numbered half, with 32 items per cell.
 
 Rows identify swaps, and columns identify the three task cells. Values are shares, with bootstrap intervals from 2.5 % to 97.5 % in parentheses.
 
