@@ -133,7 +133,7 @@ The [Try it](#try-it) example loads the model and dictionaries. These calls are 
 ### Conventions
 
 - `resid_mid.L` is between the mixer (GatedDeltaNet or attention sublayer) and MLP, at `post_attention_layernorm` input; `resid_post.L = resid_mid + mlp_out`. One state dictionary covers both sites.
-- State input is normalized per token by RMS, then site-standardized. `reconstruct` returns raw units; manual decoding takes `rms=V.token_rms(x)`.
+- The state dictionary reads the residual stream before any norm module, divided by its own size: `x * rsqrt(mean(x^2) + eps)`, with `eps = 1e-6`. This is the model's RMSNorm without its learned weight; site standardization follows. The MLP dictionary reads the same quantity multiplied by that weight (`w_eff`), which is the model's own post-norm MLP input. `reconstruct` returns raw units; manual decoding takes `rms=V.token_rms(x)`.
 - `capture` drops position 0 and masked padding. State training drops position 0; MLP training includes it. This training convention is inferred from shared code.
 - FVU is squared error divided by squared deviation from the per-dimension mean. State/MLP FVU uses raw residual/output units; `heldout_fvu_own_units` uses RMS-normalized, site-standardized state units. Transforms on per token is a mean; alive is a count; penalty is a sparsity coefficient; spliced-in loss is in nats (natural-log cross-entropy).
 - Transforms are stored largest rank first: 320 × rank 128, 640 × 64, 1,280 × 32, 2,560 × 16, 5,120 × 8. Rank is the intermediate dimension; `M.rank` has shape `(T,)`.
@@ -164,7 +164,7 @@ A group contains 4 directions; its frame is an orthonormal basis (perpendicular 
 
 We trained each layer on 30,003,200 tokens over 7,325 steps, with seed 0. The default of 24 active groups came from comparing 24, 40 and 60 at layers 7, 16, 19 and 23 on one JavaScript ternary expression, which chooses between two values according to a condition.
 
-The dictionary normalizes each token by its RMS with `eps = 1e-6`, then applies a site mean and scale. Here `Q` holds orthonormal write frames, `F` maps standardized inputs to codes, and `b_dec` is the decoder bias:
+The dictionary normalizes each token by its RMS with `eps = 1e-6`, then applies a site mean and scale. The normalized input is the model's RMSNorm without its learned weight; the MLP dictionary's input, below, includes that weight. Here `Q` holds orthonormal write frames, `F` maps standardized inputs to codes, and `b_dec` is the decoder bias:
 
 ```text
 x_rms = x * rsqrt(mean(x^2) + eps)
@@ -202,7 +202,7 @@ V_t has shape (d, rank_t); U_t has shape (rank_t, d).
 
 `ALWAYS_ON.json` lists transforms firing on at least 90% of tokens and those firing on 50 to 90%, with each transform's share of summed write energy. Its web-text sample has 128 FineWeb-Edu documents of 512 tokens, giving 65,408 after position 0 is dropped; `training_mix_heldout_counts` covers 65,536 training-mix tokens including position 0. Counts differ at 17 layers.
 
-Recorded at training: examples of counts firing on at least 90% of tokens, for those two texts.
+Counted with our research code after training: examples of counts firing on at least 90% of tokens, for those two texts.
 
 | Layer | FineWeb-Edu web text sample | Held-out training-mix shard |
 |---|---|---|
@@ -227,7 +227,7 @@ Raw FVU pools squared errors over four held-out calibration splits and divides b
 - **MLP transforms on per token**: recorded at training; mean firing count on those 65,536 tokens.
 - **MLP transforms alive**: recorded at training; transforms firing at least once out of 9,920 on those 65,536 tokens.
 - **MLP penalty**: recorded at training; sparsity coefficient from configs, a configuration value rather than a token measurement.
-- **MLP transforms on at 90% of tokens or more (web text / training mix)**: recorded at training; counts on 65,408 FineWeb-Edu tokens with position 0 dropped / 65,536 training-mix tokens with position 0 included.
+- **MLP transforms on at 90% of tokens or more (web text / training mix)**: counted with our research code after training, on 65,408 FineWeb-Edu tokens with position 0 dropped / on 65,536 held-out training-mix tokens with position 0 included.
 
 The two MLP FVU columns use different texts. The training-mix shard was deleted, and the calibration activations are unpublished, so the exact values cannot be recomputed from the published files.
 
@@ -336,4 +336,4 @@ In `cfg.json`, the format tag `kind = state_dictionary` and fields `form = bsf`,
 
 The code and dictionary weights are MIT licensed. The separately loaded base model, `Qwen/Qwen3.5-4B`, is Apache-2.0 licensed at revision `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`.
 
-`postnorm.safetensors` holds the base model's 2,560 RMSNorm coefficients and epsilon under Apache-2.0; all other tensors were trained on its activations. The MLP dictionary's form and trainer come from the MIT-licensed `crosslayer-transcoder` code, Copyright 2025 Georg Lange.
+`postnorm.safetensors` holds the base model's 2,560 RMSNorm coefficients and epsilon under Apache-2.0; all other tensors were trained on its activations. The MLP dictionary's form and trainer come from the MIT-licensed `crosslayer-transcoder` code (branch MOLT, commit 376fabe), Copyright 2025 Georg Lange.
