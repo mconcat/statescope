@@ -10,6 +10,24 @@
   "0": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.0": {
     "position_0_dropped": 0.07766795010763618,
     "with_position_0": 0.07781623545041089
@@ -26,6 +44,24 @@
   "1": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.1": {
     "position_0_dropped": 0.11530850414300274,
     "with_position_0": 0.11590084427792226
@@ -42,6 +78,24 @@
   "2": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.2": {
     "position_0_dropped": 0.16173906400532523,
     "with_position_0": 0.1621410048380477
@@ -58,6 +112,24 @@
   "3": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.3": {
     "position_0_dropped": 0.17095387108553087,
     "with_position_0": 0.17142148607521215
@@ -74,6 +146,24 @@
   "4": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.4": {
     "position_0_dropped": 0.18994019528663483,
     "with_position_0": 0.19145098485170406
@@ -90,6 +180,24 @@
   "5": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.5": {
     "position_0_dropped": 0.1956295736088371,
     "with_position_0": 0.1970605150019893
@@ -106,6 +214,24 @@
   "6": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.6": {
     "position_0_dropped": 0.2183639785147934,
     "with_position_0": 0.252434864993898
@@ -122,6 +248,24 @@
   "7": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.7": {
     "position_0_dropped": 0.24025096236533217,
     "with_position_0": 0.24942559639229345
@@ -138,6 +282,24 @@
   "8": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.8": {
     "position_0_dropped": 0.2389944788332094,
     "with_position_0": 0.2445113263045758
@@ -154,6 +316,24 @@
   "9": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.9": {
     "position_0_dropped": 0.24907879594321072,
     "with_position_0": 0.25875454047347524
@@ -170,6 +350,24 @@
   "10": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.10": {
     "position_0_dropped": 0.25759530598674635,
     "with_position_0": 0.26500837927650894
@@ -186,6 +384,24 @@
   "11": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.11": {
     "position_0_dropped": 0.2713233714451801,
     "with_position_0": 0.273401089701934
@@ -202,6 +418,24 @@
   "12": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.12": {
     "position_0_dropped": 0.2633921244355462,
     "with_position_0": 0.2646627518797248
@@ -218,6 +452,24 @@
   "13": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.13": {
     "position_0_dropped": 0.25902375962102797,
     "with_position_0": 0.25969501787391397
@@ -234,6 +486,24 @@
   "14": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.14": {
     "position_0_dropped": 0.2624942607480127,
     "with_position_0": 0.2631347177182279
@@ -250,6 +520,24 @@
   "15": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.15": {
     "position_0_dropped": 0.2622651466957777,
     "with_position_0": 0.2625805696405144
@@ -266,6 +554,24 @@
   "16": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.16": {
     "position_0_dropped": 0.22931549602359755,
     "with_position_0": 0.22955530262763624
@@ -282,6 +588,24 @@
   "17": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.17": {
     "position_0_dropped": 0.21674246993726654,
     "with_position_0": 0.21694423734572393
@@ -298,6 +622,24 @@
   "18": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.18": {
     "position_0_dropped": 0.21320208504557117,
     "with_position_0": 0.21336699132913772
@@ -314,6 +656,24 @@
   "19": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.19": {
     "position_0_dropped": 0.22593855328461915,
     "with_position_0": 0.22603034697957208
@@ -330,6 +690,24 @@
   "20": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.20": {
     "position_0_dropped": 0.21655739509461605,
     "with_position_0": 0.21662887342054
@@ -346,6 +724,24 @@
   "21": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.21": {
     "position_0_dropped": 0.22492761277964382,
     "with_position_0": 0.2250189166701303
@@ -362,6 +758,24 @@
   "22": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.22": {
     "position_0_dropped": 0.24016662876165357,
     "with_position_0": 0.24026560746098943
@@ -378,6 +792,24 @@
   "23": {
    "tokens": 257122,
    "position_0_tokens": 179,
+   "tokens_per_split": {
+    "pile": {
+     "all": 65536,
+     "position_0_dropped": 65472
+    },
+    "ultra": {
+     "all": 59034,
+     "position_0_dropped": 58970
+    },
+    "cont": {
+     "all": 66064,
+     "position_0_dropped": 66042
+    },
+    "chat": {
+     "all": 66488,
+     "position_0_dropped": 66459
+    }
+   },
    "resid_mid.23": {
     "position_0_dropped": 0.26135877775743854,
     "with_position_0": 0.2618594351919604
