@@ -8,6 +8,8 @@ __pycache__/
 .coverage*
 test_out/
 *.safetensors
+# ...except the demonstration's item pairs (token ids, 0.6 MB)
+!demo/line_count_items.safetensors
 *.egg-info/
 GOAL.md
 tests/local.env
@@ -16,5 +18,7 @@ tests/local.env
 legacy_snapshot2/
 # notes exchanged with other sessions (paths and host details; never committed)
 handoff/
+# frozen reference code of the line-count demonstration (never committed)
 legacy_snapshot3/
+# the frozen set laid out as published: symbolic links to the weights (never committed)
 release_stage2/
