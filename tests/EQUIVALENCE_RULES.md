@@ -378,3 +378,51 @@ and the modules `calibration`, `manifest`, `release`, `foldcheck` keep their nam
 above names a module, read it by its new path: `statescope.foldcheck` (R6) is `statescope.earlier_design.foldcheck`, and
 `statescope.release` (R7) is `statescope.earlier_design.release`. `statescope/splice.py` keeps its path, because the published
 manifest's `splice` field (R7) names that file. The lines above are left as they were written.
+
+## R10. Qwen3.5-4B set (written 2026-11-20, before any test or measurement of these files was run)
+
+The original project trained the second design's two dictionaries for every layer of `Qwen/Qwen3.5-4B` (32 layers, width 2,560): the
+state dictionary in the same form and size (tied, per-token RMS input, 16,384 groups of 4, k 24) and the MLP dictionary in the same
+public form with 9,920 transforms per layer (320 x the five rank tiers) and penalty 3e-05. Before this rule was written, only the
+configs and the original project's record files were read (to learn the layout and the training facts of R10.6 c); no reader of this
+repository was run on a 4B file of this set. (R1.6 ran the first design's reader on older 4B test exports of one layer.)
+
+R10 is R8 with other folders, and every limit is the one R8 states. "Reference" is the same frozen copy (`legacy_snapshot2/`) and the
+same reference script. Data, all 32 layers: the first 4,096 tokens of each of the four held-out splits of the layer's 4B calibration
+folder, position 0 kept; decisions on all 4 x 4,096 tokens, reconstructed tensors on the first 1,024 tokens of each split.
+
+**R10.1 State reader vs the reference reader.** R8.1 (a) and (b) as written, per layer, split and site.
+
+**R10.2 Trainer's held-out number from the reader alone.** R8.2 as written (1e-5 absolute against `vocab_heldout_fvu` of the run's
+`layer_recipe_done.json`).
+
+**R10.3 MLP reader vs the public forward.** R8.3 (a) and (b) as written, per layer and split. Prediction, reported and not a pass/fail
+condition: at most a few differing gate decisions over all layers (0.8B had one among 24 layers; this set has 2.5 times the transforms
+and more layers).
+
+**R10.4 Post-norm coefficients.** For every layer, `w_eff` of the `postnorm.safetensors` in the layer's export folder is bit-identical
+to the one this repository's `write_post_norm` builds from the language model, and `eps` is equal.
+
+**R10.5 Sum of writes.** R8.5 as written (1.5e-6 and 1e-6 relative).
+
+**R10.6 The folder that is published.** The original project is asked for a copy of the MLP dictionaries without training-time paths
+(config lines and safetensors header metadata rewritten, tensor bytes untouched) with a manifest, as for 0.8B (R8.7). Layer 16's MLP
+dictionary comes from a separate run of the same recipe.
+(a) Every file's sha256 equals the manifest's.
+(b) All 32 layers: every tensor that `PublicMolt(<copy>)` holds is bit-identical to the one `PublicMolt(<export R10.3 read>)` holds,
+and `eps` is equal. With (b), R10.3-R10.5 carry over to the copy without a new reference run.
+(c) Configs: all 32 state `cfg.json` hold the same training facts (tokens 30,003,200, steps 7,325, 16,384 groups of 4, k 24, form
+`bsf`, input `token_rms`, eps 1e-6, seed 0, width 2,560); all 32 MLP `config.yaml` of the copy are equal apart from the layer index
+and the logger name, with penalty 3e-05, 58,600 steps, batch 500, learning rate 4e-05 and 320 transforms per rank tier.
+(d) R8.7 (d) as written, for every header and config of the 32 + 32 folders.
+
+**R10.7 Reconstruction error on all held-out tokens.** Measured with this reader on all tokens of the four held-out splits, raw units.
+(a) State dictionary: for every layer and both sites, within 1e-4 of `raw` in the original project's
+`checks/L<L>.B1.fvu_all_nopos0.json` (position 0 dropped) and of `raw` in `checks/L<L>.B1.fvu_all.json` (position 0 included), and
+the token counts per split equal the record's.
+(b) MLP dictionary on the same tokens: reported, with and without position 0. Nothing is asserted except that the number is finite
+and below 1: the original project's recorded number (`heldout.json`) is on a held-out shard of the training capture, other tokens
+than the calibration folder's.
+
+Not covered by R10: the capture path on the 4B model (R1.5 compared `capture` with the original's capture on 0.8B only), spliced-in
+loss, trainers, and any demonstration (the line-count demonstration is on 0.8B).
