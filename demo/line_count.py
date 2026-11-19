@@ -246,7 +246,7 @@ def mixer9_of(model: HookedModel, post8: torch.Tensor) -> torch.Tensor:
     return gdn_output(model.mixer9, gdn_inputs(model.mixer9, seen)).float()
 
 
-# ---------------------------------------------------------------------------------------------- pairing, shares, labels
+# ---------------------------------------------------------------------------------------------- the measurements: pairing, shares, labels
 def onto_clean(corrupt: torch.Tensor, clean: torch.Tensor, pairing: torch.Tensor) -> torch.Tensor:
     """corrupt, clean (B, T, ...): the corrupt run's values moved onto the clean run's positions. pairing (B, T) gives for each clean
     position the corrupt position that holds the same word piece, or -1 (then the clean value stays)."""
@@ -298,114 +298,214 @@ def in_frame(frame: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     return (v @ frame.T) @ frame
 
 
-# ---------------------------------------------------------------------------------------------- the measurement
+# ---------------------------------------------------------------------------------------------- the measurements: the arms of one batch
+# An arm is one patched run of the clean texts: one tensor of the clean run is replaced by a value built from the corrupt run, and the
+# margin is read. The functions below are called by measure() once per batch, in this order, under its torch.inference_mode().
+@dataclass(frozen=True)
+class Batch:
+    """One batch of item pairs of one cell, with the unpatched runs of both texts."""
+    cell: str
+    ids: torch.Tensor            # (B, T) token ids of the clean texts
+    corrupt_ids: torch.Tensor    # (B, T) token ids of the corrupt texts
+    pairing: torch.Tensor        # (B, T) for each clean position the corrupt position that holds the same word piece, or -1
+    clean: Run
+    corrupt: Run
+
+    def swap(self, corrupt: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:
+        """The change that swapping one tensor (B, T, ...) makes: the corrupt run's values on the clean positions, minus the clean values."""
+        return onto_clean(corrupt, clean, self.pairing) - clean
+
+    def flat(self, t: torch.Tensor) -> torch.Tensor:
+        """(B, T, d) -> (B * T, d), the shape the dictionaries read"""
+        B, T, d = self.clean.post8.shape
+        return t.reshape(B * T, d)
+
+    def unflat(self, t: torch.Tensor) -> torch.Tensor:
+        """(B * T, d) -> (B, T, d)"""
+        B, T, d = self.clean.post8.shape
+        return t.view(B, T, d)
+
+
+class ArmMargins:
+    """The margins of all arms, keyed '<cell>/<arm>': one (B,) tensor per batch, in the order the arms were measured.
+    with_mix9() and with_mlp9() make the patched run of an arm and store its margin."""
+
+    def __init__(self, model: HookedModel, score: LineBreakScore) -> None:
+        self.model, self.score = model, score
+        self.by_arm: dict[str, list[torch.Tensor]] = {}
+
+    def add(self, cell: str, arm: str, m: torch.Tensor) -> None:
+        self.by_arm.setdefault(f"{cell}/{arm}", []).append(m.float().cpu())
+
+    def with_mix9(self, batch: Batch, new: torch.Tensor, arm: str) -> None:
+        """the clean texts with the output of the L9 mixer replaced by `new` (B, T, d)"""
+        self.add(batch.cell, arm, self.score.margin(self.model.run(batch.ids, patch_mix9=lambda t: new).hidden))
+
+    def with_mlp9(self, batch: Batch, new: torch.Tensor, arm: str) -> None:
+        """the clean texts with the output of the L9 MLP replaced by `new` (B, T, d)"""
+        self.add(batch.cell, arm, self.score.margin(self.model.run(batch.ids, patch_mlp9=lambda t: new).hidden))
+
+    def tensors(self) -> dict[str, torch.Tensor]:
+        """'margin/<cell>/<arm>' -> (items of the cell,)"""
+        return {f"margin/{k}": torch.cat(v) for k, v in self.by_arm.items()}
+
+
+def measure_mixer_arms(arms: ArmMargins, batch: Batch) -> torch.Tensor:
+    """The L9 mixer: its whole output swapped (layer_y); only head 10's read swapped (head_o).
+    Returns head 10's swapped write (B, T, d); the link arms use it again."""
+    c, x = batch.clean, batch.corrupt
+    arms.with_mix9(batch, onto_clean(x.mix9, c.mix9, batch.pairing), "layer_y")
+    d_head = head_swapped_write(arms.model.mixer9, HEAD, c.mixer_in9, x.mixer_in9, batch.pairing)
+    arms.with_mix9(batch, c.mix9 + d_head, "head_o")
+    return d_head
+
+
+def through_mixer9(arms: ArmMargins, batch: Batch, mixer9_clean: torch.Tensor, change: torch.Tensor, arm: str) -> None:
+    """One arm: `change` (B, T, d) is added to resid_post.8 and sent through the model's own L9 mixer only (the residual's direct
+    path stays clean). mixer9_clean is mixer9_of() of the clean resid_post.8."""
+    c = batch.clean
+    arms.with_mix9(batch, c.mix9 + mixer9_of(arms.model, c.post8 + change) - mixer9_clean, arm)
+
+
+def measure_l8_arms(arms: ArmMargins, batch: Batch, molt8: PublicMolt, vocab8: StateVocab) -> tuple[torch.Tensor, torch.Tensor]:
+    """Five swaps in resid_post.8, each sent through the L9 mixer: all of resid_post.8, the L8 MLP's output, the writes of all
+    transforms of the L8 dictionary, transform 189's write, state group 11586's contribution.
+    Returns the gates of transform 189 on the clean texts (B, T, 1) and transform 189's swapped write (B, T, d)."""
+    c, x = batch.clean, batch.corrupt
+    site8 = "resid_post.8"
+    mixer9_clean = mixer9_of(arms.model, c.post8)
+    gate8_c, y8_c = molt8.forward(batch.flat(c.mid8))
+    _, y8_x = molt8.forward(batch.flat(x.mid8))
+    w189 = batch.swap(batch.unflat(molt8.transform_write(batch.flat(x.mid8), L8_TRANSFORM)),
+                      batch.unflat(molt8.transform_write(batch.flat(c.mid8), L8_TRANSFORM)))
+    through_mixer9(arms, batch, mixer9_clean, batch.swap(x.post8, c.post8), "l8/full_post8")
+    through_mixer9(arms, batch, mixer9_clean, batch.swap(x.mlp8, c.mlp8), "l8/mlp8_true")
+    through_mixer9(arms, batch, mixer9_clean, batch.swap(batch.unflat(y8_x), batch.unflat(y8_c)), "l8/molt8_all")
+    through_mixer9(arms, batch, mixer9_clean, w189, "l8/t189")                                                    # fixed output key
+    group_swap = batch.swap(group_contribution(vocab8, x.post8, site8, L8_GROUP), group_contribution(vocab8, c.post8, site8, L8_GROUP))
+    through_mixer9(arms, batch, mixer9_clean, group_swap, "l8/g11586")                                            # fixed output key
+    B, T, _ = c.post8.shape
+    return gate8_c[:, [L8_TRANSFORM]].view(B, T, -1), w189
+
+
+def frame_energy(w189: torch.Tensor, group_frame: torch.Tensor, random_frames: list[torch.Tensor]) -> dict[str, float]:
+    """How much of transform 189's swapped write (B, T, d) lies inside group 11586's frame. Sums of squares over one batch, position 0
+    dropped: of the whole write ("all"), of its part inside the group's frame ("group") and inside each random frame ("random<j>").
+    measure() adds the batches up and divides by "all"."""
+    w = w189[:, 1:]
+    energy = {"all": float(w.pow(2).sum()), "group": float(in_frame(group_frame, w).pow(2).sum())}
+    for j, frame in enumerate(random_frames):
+        energy[f"random{j}"] = float(in_frame(frame, w).pow(2).sum())
+    return energy
+
+
+def measure_l9_arms(arms: ArmMargins, batch: Batch, molt9: PublicMolt) -> torch.Tensor:
+    """Four swaps at the L9 MLP's output: the whole output, the writes of all transforms of the L9 dictionary, transform 410's write,
+    transform 1749's write. Returns the gates of transforms 410 and 1749 on the clean texts (B, T, 2)."""
+    c, x = batch.clean, batch.corrupt
+    gate9_c, y9_c = molt9.forward(batch.flat(c.mid9))
+    _, y9_x = molt9.forward(batch.flat(x.mid9))
+    arms.with_mlp9(batch, c.mlp9 + batch.swap(x.mlp9, c.mlp9), "l9/mlp9_y")
+    arms.with_mlp9(batch, c.mlp9 + batch.swap(batch.unflat(y9_x), batch.unflat(y9_c)), "l9/molt9_all")
+    for t in L9_TRANSFORMS:
+        write_c = batch.unflat(molt9.transform_write(batch.flat(c.mid9), t))
+        write_x = batch.unflat(molt9.transform_write(batch.flat(x.mid9), t))
+        arms.with_mlp9(batch, c.mlp9 + batch.swap(write_x, write_c), f"l9/t{t}")
+    B, T, _ = c.post8.shape
+    return gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1)
+
+
+def link_writes(batch: Batch, molt9: PublicMolt, mid9: torch.Tensor) -> dict[str, torch.Tensor]:
+    """For a resid_mid.9 (B, T, d): per route of LINK_ROUTES, the summed writes (B, T, d) of the route's L9 transforms."""
+    one = {t: batch.unflat(molt9.transform_write(batch.flat(mid9), t)) for t in LINK_ROUTES["F2"]}
+    return {route: sum(one[t] for t in transforms) for route, transforms in LINK_ROUTES.items()}
+
+
+def link_through_transforms(arms: ArmMargins, batch: Batch, molt9: PublicMolt, writes_clean: dict[str, torch.Tensor],
+                            change: torch.Tensor, arm: str) -> None:
+    """Arms link/<arm>/F2 and link/<arm>/T2: of a `change` (B, T, d) of the mixer's output, only the change it causes in the writes
+    of a route's L9 transforms reaches the answer. writes_clean is link_writes() of the clean resid_mid.9."""
+    c = batch.clean
+    changed = link_writes(batch, molt9, c.mid9 + change)
+    for route in LINK_ROUTES:
+        arms.with_mlp9(batch, c.mlp9 + changed[route] - writes_clean[route], f"link/{arm}/{route}")
+
+
+def link_down_and_through(arms: ArmMargins, batch: Batch, molt9: PublicMolt, writes_clean: dict[str, torch.Tensor],
+                          change: torch.Tensor, arm: str) -> None:
+    """Arm link/<arm>/down: `change` (B, T, d) is added at the mixer's output and everything downstream follows.
+    Then the same change through the routes (link_through_transforms)."""
+    arms.with_mix9(batch, batch.clean.mix9 + change, f"link/{arm}/down")
+    link_through_transforms(arms, batch, molt9, writes_clean, change, arm)
+
+
+def measure_link_arms(arms: ArmMargins, batch: Batch, molt9: PublicMolt, group_frame: torch.Tensor, random_frames: list[torch.Tensor],
+                      d_head: torch.Tensor) -> None:
+    """The link from the L9 mixer to the L9 transforms. The mixer's swap (the whole output: "mix"; head 10's write d_head: "h10o"),
+    taken three ways: all of it, only its part inside group 4885's frame, the rest. Each is measured with everything downstream
+    (`down`) and through the writes of a set of L9 transforms only (`F2`, `T2`). Last, the whole swap inside each random frame,
+    through the transforms only."""
+    c, x = batch.clean, batch.corrupt
+    writes_clean = link_writes(batch, molt9, c.mid9)
+    d_mix = batch.swap(x.mix9, c.mix9)
+    for base, change in (("mix", d_mix), ("h10o", d_head)):
+        inside = in_frame(group_frame, change)
+        link_down_and_through(arms, batch, molt9, writes_clean, change, f"{base}/full")
+        link_down_and_through(arms, batch, molt9, writes_clean, inside, f"{base}/g4885")                       # fixed output key
+        link_down_and_through(arms, batch, molt9, writes_clean, change - inside, f"{base}/minus_g4885")        # fixed output key
+    for j, frame in enumerate(random_frames):
+        link_through_transforms(arms, batch, molt9, writes_clean, in_frame(frame, d_mix), f"mix/rand{j}")
+
+
+# ---------------------------------------------------------------------------------------------- the measurements: all items, summary
+def draw_random_frames(d: int, device: torch.device) -> list[torch.Tensor]:
+    """N_RANDOM_FRAMES random frames of the residual space, each (FRAME_DIM, d) with orthonormal rows: the comparison for a state
+    group's frame. One generator with seed 0, drawn in order; measure() calls this once, before the first batch."""
+    generator = torch.Generator().manual_seed(0)
+    return [torch.linalg.qr(torch.randn(d, FRAME_DIM, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
+
+
+def unpatched_batch(model: HookedModel, items: dict[str, torch.Tensor], cell: str, start: int) -> Batch:
+    """The item pairs start ... start + BATCH - 1 of one cell on the model's device, with both texts run without a patch."""
+    device = model.lm.device
+    ids = items[f"{cell}/ids"][start:start + BATCH].long().to(device)
+    corrupt_ids = items[f"{cell}/cor"][start:start + BATCH].long().to(device)
+    pairing = items[f"{cell}/pi"][start:start + BATCH].long().to(device)
+    clean = model.run(ids)
+    corrupt = model.run(corrupt_ids)
+    return Batch(cell, ids, corrupt_ids, pairing, clean, corrupt)
+
+
 @torch.inference_mode()
 def measure(model: HookedModel, score: LineBreakScore, items: dict[str, torch.Tensor], molt8: PublicMolt, molt9: PublicMolt,
             vocab8: StateVocab, vocab9: StateVocab) -> tuple[dict, dict]:
-    device = model.lm.device
-    site8 = "resid_post.8"
-    frame, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
-    generator = torch.Generator().manual_seed(0)
-    random_frames = [torch.linalg.qr(torch.randn(vocab8.d, FRAME_DIM, generator=generator))[0].T.to(device) for _ in range(N_RANDOM_FRAMES)]
-    margins: dict[str, list[torch.Tensor]] = {}
+    """All arms on all items, cell by cell in batches of BATCH. Returns the tensors of result.safetensors (margin/<cell>/<arm>,
+    gate/l8, gate/l9, label/<name>) and the energy fractions of transform 189's swapped write."""
+    frame8, frame9 = vocab8.Q[L8_GROUP], vocab9.Q[L9_GROUP]
+    random_frames = draw_random_frames(vocab8.d, model.lm.device)
+    arms = ArmMargins(model, score)
     energy = {"all": 0.0, "group": 0.0, **{f"random{j}": 0.0 for j in range(N_RANDOM_FRAMES)}}
     gates: dict[str, list[torch.Tensor]] = {"l8": [], "l9": []}
     labels: dict[str, list[torch.Tensor]] = {}
 
-    def add(cell: str, arm: str, m: torch.Tensor) -> None:
-        margins.setdefault(f"{cell}/{arm}", []).append(m.float().cpu())
-
     for cell in CELLS:
-        for s in range(0, items[f"{cell}/ids"].shape[0], BATCH):
-            ids = items[f"{cell}/ids"][s:s + BATCH].long().to(device)
-            corrupt_ids = items[f"{cell}/cor"][s:s + BATCH].long().to(device)
-            pairing = items[f"{cell}/pi"][s:s + BATCH].long().to(device)
-            c, x = model.run(ids), model.run(corrupt_ids)
-            B, T, d = c.post8.shape
-            add(cell, "m_c", score.margin(c.hidden))
-            add(cell, "m_x", score.margin(x.hidden))
+        for start in range(0, items[f"{cell}/ids"].shape[0], BATCH):
+            batch = unpatched_batch(model, items, cell, start)
+            arms.add(cell, "m_c", score.margin(batch.clean.hidden))
+            arms.add(cell, "m_x", score.margin(batch.corrupt.hidden))
+            d_head = measure_mixer_arms(arms, batch)
+            gate8, w189 = measure_l8_arms(arms, batch, molt8, vocab8)
+            for name, value in frame_energy(w189, frame8, random_frames).items():
+                energy[name] += value
+            gate9 = measure_l9_arms(arms, batch, molt9)
+            measure_link_arms(arms, batch, molt9, frame9, random_frames, d_head)
+            gates["l8"].append(gate8.cpu())
+            gates["l9"].append(gate9.cpu())
+            for name, label in token_labels(batch.ids, score).items():
+                labels.setdefault(name, []).append(label)
+            print(f"{cell}: items {start}-{start + len(batch.ids) - 1} done", flush=True)
 
-            def swap(corrupt: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:
-                return onto_clean(corrupt, clean, pairing) - clean
-
-            def with_mix9(new: torch.Tensor, arm: str) -> None:
-                add(cell, arm, score.margin(model.run(ids, patch_mix9=lambda t: new).hidden))
-
-            def with_mlp9(new: torch.Tensor, arm: str) -> None:
-                add(cell, arm, score.margin(model.run(ids, patch_mlp9=lambda t: new).hidden))
-
-            # ---- the L9 mixer: its whole output swapped; only head 10's read swapped
-            with_mix9(onto_clean(x.mix9, c.mix9, pairing), "layer_y")
-            d_head = head_swapped_write(model.mixer9, HEAD, c.mixer_in9, x.mixer_in9, pairing)
-            with_mix9(c.mix9 + d_head, "head_o")
-
-            # ---- a change of resid_post.8, sent through the model's own L9 mixer only (the residual's direct path stays clean)
-            mixer9_clean = mixer9_of(model, c.post8)
-
-            def through_mixer9(change: torch.Tensor, arm: str) -> None:
-                with_mix9(c.mix9 + mixer9_of(model, c.post8 + change) - mixer9_clean, arm)
-
-            def flat(t: torch.Tensor) -> torch.Tensor:
-                return t.reshape(B * T, d)
-
-            gate8_c, y8_c = molt8.forward(flat(c.mid8))
-            _, y8_x = molt8.forward(flat(x.mid8))
-            w189 = swap(molt8.transform_write(flat(x.mid8), L8_TRANSFORM).view(B, T, d), molt8.transform_write(flat(c.mid8), L8_TRANSFORM).view(B, T, d))
-            through_mixer9(swap(x.post8, c.post8), "l8/full_post8")
-            through_mixer9(swap(x.mlp8, c.mlp8), "l8/mlp8_true")
-            through_mixer9(swap(y8_x.view(B, T, d), y8_c.view(B, T, d)), "l8/molt8_all")
-            through_mixer9(w189, "l8/t189")
-            through_mixer9(swap(group_contribution(vocab8, x.post8, site8, L8_GROUP), group_contribution(vocab8, c.post8, site8, L8_GROUP)), "l8/g11586")
-
-            # how much of transform 189's swapped write lies inside group 11586's frame (position 0 dropped)
-            w = w189[:, 1:]
-            energy["all"] += float(w.pow(2).sum())
-            energy["group"] += float(in_frame(frame, w).pow(2).sum())
-            for j, fr in enumerate(random_frames):
-                energy[f"random{j}"] += float(in_frame(fr, w).pow(2).sum())
-
-            # ---- a change of the L9 MLP output
-            gate9_c, y9_c = molt9.forward(flat(c.mid9))
-            _, y9_x = molt9.forward(flat(x.mid9))
-            with_mlp9(c.mlp9 + swap(x.mlp9, c.mlp9), "l9/mlp9_y")
-            with_mlp9(c.mlp9 + swap(y9_x.view(B, T, d), y9_c.view(B, T, d)), "l9/molt9_all")
-            for t in L9_TRANSFORMS:
-                write_c, write_x = molt9.transform_write(flat(c.mid9), t).view(B, T, d), molt9.transform_write(flat(x.mid9), t).view(B, T, d)
-                with_mlp9(c.mlp9 + swap(write_x, write_c), f"l9/t{t}")
-
-            # ---- the link: the mixer's swap (whole, or head 10's), all of it / only its part inside group 4885's frame / the rest.
-            #      `down` = added at the mixer output; `F2` / `T2` = only the change it causes in the writes of a set of L9 transforms
-            def writes9(mid9: torch.Tensor) -> dict[str, torch.Tensor]:
-                one = {t: molt9.transform_write(flat(mid9), t).view(B, T, d) for t in LINK_ROUTES["F2"]}
-                return {route: sum(one[t] for t in transforms) for route, transforms in LINK_ROUTES.items()}
-
-            writes9_clean = writes9(c.mid9)
-
-            def through_transforms(change: torch.Tensor, arm: str) -> None:
-                changed = writes9(c.mid9 + change)
-                for route in LINK_ROUTES:
-                    with_mlp9(c.mlp9 + changed[route] - writes9_clean[route], f"link/{arm}/{route}")
-
-            def link(change: torch.Tensor, arm: str) -> None:
-                with_mix9(c.mix9 + change, f"link/{arm}/down")
-                through_transforms(change, arm)
-
-            d_mix = swap(x.mix9, c.mix9)
-            for base, change in (("mix", d_mix), ("h10o", d_head)):
-                inside = in_frame(frame9, change)
-                link(change, f"{base}/full")
-                link(inside, f"{base}/g4885")
-                link(change - inside, f"{base}/minus_g4885")
-            for j, fr in enumerate(random_frames):
-                through_transforms(in_frame(fr, d_mix), f"mix/rand{j}")
-
-            gates["l8"].append(gate8_c[:, [L8_TRANSFORM]].view(B, T, -1).cpu())
-            gates["l9"].append(gate9_c[:, list(L9_TRANSFORMS)].view(B, T, -1).cpu())
-            for k, v in token_labels(ids, score).items():
-                labels.setdefault(k, []).append(v)
-            print(f"{cell}: items {s}-{s + B - 1} done", flush=True)
-
-    tensors = {f"margin/{k}": torch.cat(v) for k, v in margins.items()}
+    tensors = arms.tensors()
     tensors["gate/l8"], tensors["gate/l9"] = torch.cat(gates["l8"]), torch.cat(gates["l9"])
     tensors.update({f"label/{k}": torch.cat(v).to(torch.int32) for k, v in labels.items()})
     return tensors, {"energy_fraction_t189_swap": {k: v / energy["all"] for k, v in energy.items() if k != "all"}}
@@ -472,6 +572,7 @@ def print_summary(result: dict) -> None:
         print("    other tokens by characters in the line so far: " + "  ".join(f"{k}: {v:.2f}" for k, v in rates["by_chars_in_line"].items()))
 
 
+# ---------------------------------------------------------------------------------------------- command line
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--release", required=True, help="folder that holds state/L<L>/ and mlp/L<L>/ of the published set")
