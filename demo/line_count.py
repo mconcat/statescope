@@ -26,6 +26,7 @@ The chain (found by the original project; this script takes its choice of transf
 Needs transformers with Qwen3.5 support; on a GPU also flash-linear-attention (without it the GDN layers run a slow reference kernel).
 
 The file has three parts after the constants: the model with hooks, the L9 mixer (a Gated DeltaNet layer) by hand, the measurements.
+(The pairing helper that both the mixer part and the measurements use sits between the first two.)
 """
 from __future__ import annotations
 
@@ -169,6 +170,16 @@ class LineBreakScore:
         return (h @ self.W_newline.T).logsumexp(1) - (h @ self.W_space.T).logsumexp(1)
 
 
+# ---------------------------------------------------------------------------------------------- pairing: the corrupt run's values on the clean run's positions
+def onto_clean(corrupt: torch.Tensor, clean: torch.Tensor, pairing: torch.Tensor) -> torch.Tensor:
+    """corrupt, clean (B, T, ...): the corrupt run's values moved onto the clean run's positions. pairing (B, T) gives for each clean
+    position the corrupt position that holds the same word piece, or -1 (then the clean value stays)."""
+    shape = [1] * corrupt.dim()
+    shape[0], shape[1] = corrupt.shape[0], corrupt.shape[1]
+    index = pairing.clamp_min(0).view(*shape).expand_as(corrupt)
+    return torch.where((pairing >= 0).view(*shape), corrupt.gather(1, index), clean)
+
+
 # ---------------------------------------------------------------------------------------------- the L9 mixer (a Gated DeltaNet layer) by hand
 def _qwen_module() -> types.ModuleType:
     """transformers' Qwen3.5 module: its causal convolution, its delta-rule kernel and its l2norm are used below.
@@ -250,16 +261,7 @@ def mixer9_of(model: HookedModel, post8: torch.Tensor) -> torch.Tensor:
     return gdn_output(model.mixer9, gdn_inputs(model.mixer9, seen)).float()
 
 
-# ---------------------------------------------------------------------------------------------- the measurements: pairing, shares, labels
-def onto_clean(corrupt: torch.Tensor, clean: torch.Tensor, pairing: torch.Tensor) -> torch.Tensor:
-    """corrupt, clean (B, T, ...): the corrupt run's values moved onto the clean run's positions. pairing (B, T) gives for each clean
-    position the corrupt position that holds the same word piece, or -1 (then the clean value stays)."""
-    shape = [1] * corrupt.dim()
-    shape[0], shape[1] = corrupt.shape[0], corrupt.shape[1]
-    index = pairing.clamp_min(0).view(*shape).expand_as(corrupt)
-    return torch.where((pairing >= 0).view(*shape), corrupt.gather(1, index), clean)
-
-
+# ---------------------------------------------------------------------------------------------- the measurements: shares, labels
 def share(m_clean: torch.Tensor, m_patched: torch.Tensor, m_corrupt: torch.Tensor, n_boot: int = 1000) -> list[float]:
     """[share, 2.5 %, 97.5 %] with a bootstrap over items (the original's seed and draw)"""
     num, den = m_clean - m_patched, m_clean - m_corrupt
