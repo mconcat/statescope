@@ -10,8 +10,9 @@ are wrapped backward at 1.75 times the width.
 
 Score. m = logsumexp(logits of newline tokens) - logsumexp(logits of tokens that start with a space), at the last token.
 A patch takes one tensor of the clean run and replaces it with a value built from the corrupt run (moved onto the clean run's token
-positions). share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt): the part of the clean/corrupt difference that the
-patched tensor carries. 0 = the patch changes nothing, 1 = the patch alone turns the clean run into the corrupt one.
+positions). We average over the paired texts in each condition.
+share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt).
+At 0, the mean margin is unchanged. At 1, the patched run has the same mean margin as the corrupt run.
 
 The chain (found by the original project; this script takes its choice of transform, group and head as given and re-measures):
   1. L8 MLP dictionary, transform 189 fires on the first token of a line. Its write lies mostly inside the 4-dimensional frame of

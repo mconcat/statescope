@@ -139,13 +139,15 @@ The margin is the last-token logsumexp of newline-token logits minus the logsume
 m = logsumexp(logits of newline tokens) - logsumexp(logits of tokens that start with a space)
 ```
 
-A patch replaces a tensor in the clean run with a value built from the corrupt run and moved onto the clean run's token positions. A share is the part of the clean/corrupt margin difference carried by the patched tensor.
+A patch replaces a tensor in the clean run with a value built from the corrupt run and moved onto the clean run's token positions. We measure the effect of the patch by comparing mean margins across the paired texts in each condition.
 
 ```text
 share = mean(m_clean - m_patched) / mean(m_clean - m_corrupt)
 ```
 
-A share of 0 means that the patch changes nothing. A share of 1 means that the patch alone turns the clean run into the corrupt one. A cell is a task setting defined by the wrapping width and how the corrupt text is made. The three cells are `count:60`, `count:100` and `width:100`. In the count cells, the corrupt text's last line starts at a later word than the clean text's, chosen so that the line holds between 35% and 65% of the width at the last word, and the preceding lines are wrapped backward from that word at the same width, moving their line breaks too. In the width cell, the corrupt text's last line starts at the same word as the clean text's, and the preceding lines are wrapped backward at 1.75 times the width. Each cell contains 64 pairs in `demo/line_count_items.safetensors`, which stores token ids and position pairing. The texts are re-wrapped excerpts from FineWeb-Edu documents.
+A share of 0 means the patch leaves the mean margin unchanged. At 1, the patched run has the same mean margin as the corrupt run. Changes to individual items can cancel out in the mean. A share can be negative or exceed 1, and adding shares from overlapping paths can count the same effect twice.
+
+A cell is a task setting defined by the wrapping width and how the corrupt text is made. The three cells are `count:60`, `count:100` and `width:100`. In the count cells, the corrupt text's last line starts at a later word than the clean text's, chosen so that the line holds between 35% and 65% of the width at the last word, and the preceding lines are wrapped backward from that word at the same width, moving their line breaks too. In the width cell, the corrupt text's last line starts at the same word as the clean text's, and the preceding lines are wrapped backward at 1.75 times the width. Each cell contains 64 pairs in `demo/line_count_items.safetensors`, which stores token ids and position pairing. The texts are re-wrapped excerpts from FineWeb-Edu documents.
 
 We found the following chain. The script uses our chosen transform, group and head and re-measures their effects. It does not search for them.
 
@@ -153,7 +155,7 @@ We found the following chain. The script uses our chosen transform, group and he
 2. The model's L9 mixer reads that write. Swapping only transform 189's write or only group 11586 moves the answer about as much as swapping the whole L8 MLP output in the count cells. GatedDeltaNet head 10 carries the count inside the mixer.
 3. Transforms 410 and 1749 of the L9 MLP dictionary turn the count into the line-break decision. Transform 410 is on while the line is short, and transform 1749 is on once it is long. What the L9 transforms read of the mixer's write lies mostly inside the 4-dimensional frame of state group 4885 of `resid_mid.9`. That part alone moves them about as much as the whole write. The rest moves them little but still reaches the answer through other routes. This is measured for the six selected L9 transforms (410, 1749, 6, 3720, 1394, 2275) together and for 410 and 1749 alone.
 
-This command runs the demonstration. It ran in under two minutes on one RTX 5090, including model loading.
+This command remeasures the early L8–L9 line-count pathway. It ran in under two minutes on one RTX 5090, including model loading.
 
 ```sh
 python demo/line_count.py --release <folder with state/ and mlp/> --device cuda:0 --out <folder>
