@@ -326,7 +326,7 @@ These are our experiments with this set; their scripts are not published. They u
 
 Across 24 rule families it had not been tuned on, correct-rule rates rose from 0.516 to 0.773: 1,536 generations from 768 prompts, each generated twice, once greedily and once sampled. We reused the shift strength fixed in an earlier experiment. Among the 768 greedy generations, 23 correct answers became wrong and 232 wrong answers became correct. In the earlier experiment's 96 generations, a random group changed the result by -0.01.
 
-Forcing the first body token to `#` gives a similar rate: 0.65, against 0.72 with the unit, with the difference inside the interval. We selected the unit by contrasting prompts with and without an instruction to reason in comments first.
+Forcing the first body token to `#` gives a similar rate: 0.65, against 0.72 with the unit, with the difference inside the interval. We selected the unit by contrasting prompts with and without the sentence "Reply with code only."; without that sentence, the model opens the function body with reasoning in comments.
 
 **ABA/ABB rules.** ABA repeats the first item in third position; ABB repeats the second. The task, and the picture of a stage that abstracts the rule into a variable, come from Yang et al. (2025). We used comma-separated words and two examples in one plain-text format. At positions where the rule is abstracted, at layers 11 to 14, one state group's frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference; four groups carried 0.50 to 0.56 and sixteen 0.67 to 0.78. One direction found with supervision carried 0.78 to 0.89; a random 64-dimensional subspace carried 0.01 to 0.02.
 
