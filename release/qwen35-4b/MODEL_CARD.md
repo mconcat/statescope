@@ -5,7 +5,9 @@ base_model: Qwen/Qwen3.5-4B
 
 # Qwen3.5-4B per-layer dictionaries
 
-This is the statescope set for Qwen3.5-4B: two dictionaries per layer and a Python reader. statescope reads a language model's computation through per-layer state dictionaries and MLP transform dictionaries; sets for other models are planned. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
+This statescope set for Qwen3.5-4B has two dictionaries per layer and a Python reader. Sets for other models are planned. The state dictionary reconstructs the residual stream, the vector layers pass along, using a few active groups, each a set of four learned directions selected together. Those directions form its frame, and a token's four coordinates in the frame are its code. The MLP (multilayer perceptron) dictionary reconstructs the layer's MLP output as a sum of transforms, low-rank linear operations on the input. Each transform has a gate that opens when a reading along one input direction exceeds a learned threshold. The gate scales the transform's write.
+
+Our in-depth study of these dictionaries follows [line counting in the Qwen3.5-0.8B set](https://statescope.ai/#example).
 
 ### What you can do with it
 
@@ -15,13 +17,26 @@ This is the statescope set for Qwen3.5-4B: two dictionaries per layer and a Pyth
 
 ### What these units have been used for
 
-We used these units in the following experiments; their scripts are not published.
+**Input validation in Python.** We projected the mean state difference between paired validation and neutral prompts into group 2879's frame at `resid_post.10`, just after the layer-10 MLP. We kept the neutral prompt text fixed and added the vector to the state at each of the 17 tokens of its neutral sentence. One addition at the vector's measured size is the mean dose. We scored the generated code and ran the functions. Brackets give 95% intervals over tasks.
 
-- The model had to infer an unknown rule from a few input-output cases and complete a Python function; the test covered 24 rule families it had not been tuned on. We moved the residual stream inside a single state group's frame (the four directions of a group), at just the token before the function body. We used group 9167 of `resid_mid.27`, and the model then reasoned in comments before writing the rule. The rate of correct rules rose from 0.516 to 0.773. Forcing the first token of the body to the comment sign `#` gives a similar rate.
-- In an ABA rule the third item repeats the first; in an ABB rule it repeats the second. The task comes from Yang et al. (2025), who describe a stage that turns such a rule into an abstract variable; we followed it in Qwen3.5-4B. At layers 11 to 14, the sixteen highest-ranked state groups carried 0.67 to 0.78 of the effect of swapping the whole residual difference. Moving the residual stream inside the frame of group 12112 at `resid_post.13` changed which rule the model followed. It flipped from ABA to ABB in 0.45 of prompts.
-- At layer 7, the MLP dictionary's reconstruction carries 0.89 of the MLP's contribution to a hand-traced JavaScript comparison.
+| Measure | No edit | Mean dose | Twice the dose |
+|---|---:|---:|---:|
+| Code contains `raise` or `isinstance` | 31.9% [21.8, 42.6] | 48.6% [37.5, 59.3] | 72.7% [63.9, 81.0] |
+| Wrong-type inputs rejected | 5.3% | 12.4% | 51.0% |
+| Wrong-value inputs rejected | 56.9% | 84.6% | 94.0% |
+| Functions passing every valid case | 94.4% | 90.7% | 88.9% |
 
-The prompts were built from templates, and we chose the units by contrasting two kinds of prompts.
+With the instruction written into the prompt, 67.1% of functions passed every valid case. On two other neutral sentences, the same edit increased the fraction containing `raise` or `isinstance` by +4.2 and +6.5 percentage points at the mean dose and by +28.7 and +14.8 points at twice the dose, respectively.
+
+**ABA and ABB rules.** The third word repeats the first in ABA and the second in ABB. Two directions in group 12487 track whether a word repeats and which word it repeats. Layer-15 attention head 14 reads both. Moving the state it reads toward the other rule reproduced 0.24 to 0.39 of the unedited mean difference between rules inside four frames at the answer position. Along the full rule direction the fractions were 0.20 and 0.26 for the two directions of the edit.
+
+**Digit comparison.** Group 9719 at `resid_mid.7`, just before the layer-7 MLP, separates smaller, equal and larger digits in the same slot on successive lines. Transform 357 reads whether the current digit is smaller and 472 reads whether it is larger. The parts of their read directions inside the group's frame have cosine -0.90. The full directions have cosine +0.06.
+
+**A randomly drawn group.** In group 15417 at `resid_post.27`, we moved one coordinate of “vital” to match “fatal”, “deadly”, “lethal” or “mortal” in six sentence templates. We compared the summed probabilities of two sets of eight nouns. The log ratio shifted toward the set associated with death words in all 24 pairs, by +1.41 nats on average. In “It was a W”, all 41 adjectives had negative second coordinates. “Vital”, “fatal” and “pivotal” were the most negative.
+
+**Python rule completion.** We asked for a function that fit a few input-output cases. Moving the state inside group 9167's frame at `resid_mid.27` just before the function body led the model to reason in comments. Across 24 held-out rule families the correct-rule rate rose from 0.516 to 0.773. Forcing the first body token to `#` gave a similar rate in a separate comparison.
+
+**JavaScript comparison.** At layer 7, the MLP reconstruction carried 0.89 of the MLP's own contribution to a hand-traced JavaScript comparison.
 
 ### Try it
 
@@ -68,7 +83,7 @@ python demo/verify_release.py --release <folder>
 - State files occupy about 40.0 GiB (43.0 GB) and MLP files about 128.0 GiB (137.5 GB).
 - Each state dictionary activates 24 of 16,384 groups per token.
 - Each MLP dictionary has 9,920 transforms.
-- Mixers (a layer's GatedDeltaNet or attention sublayer) are read directly, at the level of the model's own heads and channels; the dictionaries cover the residual stream and the MLPs. This follows a comparison on the 0.8B model: a stateful transcoder trained on 18 of its GatedDeltaNet layers reproduced about one third of the true head's response in a line-counting computation, while one of the model's own heads carried the count about as well as the whole mixer.
+- We read each mixer, the GatedDeltaNet or attention sublayer that combines information across tokens, directly through the model's heads and channels. The dictionaries cover the residual stream and the MLPs. On the 0.8B model, a stateful transcoder trained on 18 GatedDeltaNet layers reproduced 33 to 47 percent of the counting head's response to a swap of the layer-8 MLP output and 68 to 74 percent of its response to a swap of the whole residual. The counting head carried the count about as well as the whole mixer.
 
 A smaller set for [Qwen3.5-0.8B](https://huggingface.co/mconcat/statescope-qwen3.5-0.8b) is published separately and comes with a runnable demonstration.
 
@@ -320,19 +335,36 @@ The 40- and 60-group dictionaries are outside this set. Reading the 24-group dic
 
 ### What these units have been used for, in full
 
-These are our experiments with this set; their scripts are not published. They used templated prompts and units selected by contrasts between two kinds of prompts.
+We used templated prompts in these experiments. Their scripts are unpublished.
 
-**Python rule completion.** We asked the model to infer a rule from input-output cases and complete a Python function. At the token just before its body, we shifted the residual inside the 4-dimensional frame of group 9167 at `resid_mid.27`. The model then reasoned in comments before writing the rule.
+**Input validation in Python.** On 16 tasks we measured the mean residual difference between paired prompts. One asked for argument validation and an error for invalid inputs. The other asked for a description of the arguments and readable code. At `resid_post.10`, group 2879's frame held the largest projection, 0.45 of the full difference in norm. We added that projected vector to the state at each of the 17 tokens of the neutral sentence. One addition at its measured size is the mean dose. The prompt text stayed the same, and twelve unedited tokens followed the edit through the opening Python code fence.
 
-Across 24 rule families it had not been tuned on, correct-rule rates rose from 0.516 to 0.773: 1,536 generations from 768 prompts, each generated twice, once greedily and once sampled. We reused the shift strength fixed in an earlier experiment. Among the 768 greedy generations, 23 correct answers became wrong and 232 wrong answers became correct. In the earlier experiment's 96 generations, a random group changed the result by -0.01.
+On 72 evaluation tasks we generated one greedy and two sampled answers per task, giving 216 functions per condition. We ran them on 678 valid inputs, 297 wrong-type inputs and 87 wrong-value inputs. The wrong-value cases came from the 38 tasks with a stated value restriction. We counted an invalid input as rejected when a `raise` statement in the function fired. Rejection rates are means over tasks. Brackets give 95% bootstrap intervals over tasks.
 
-Forcing the first body token to `#` gives a similar rate: 0.65, against 0.72 with the unit, with the difference inside the interval. We selected the unit by contrasting prompts with and without the sentence "Reply with code only."; without that sentence, the model opens the function body with reasoning in comments.
+| Condition | Contains `raise` or `isinstance` | Wrong-type inputs rejected | Wrong-value inputs rejected | Passes every valid case |
+|---|---:|---:|---:|---:|
+| No edit | 31.9% [21.8, 42.6] | 5.3% | 56.9% | 94.4% |
+| Mean dose | 48.6% [37.5, 59.3] | 12.4% | 84.6% | 90.7% |
+| Twice the dose | 72.7% [63.9, 81.0] | 51.0% | 94.0% | 88.9% |
+| Validation instruction in the prompt | 100.0% | 94.5% | 98.2% | 67.1% |
 
-**ABA/ABB rules.** ABA repeats the first item in third position; ABB repeats the second. The task, and the picture of a stage that abstracts the rule into a variable, come from Yang et al. (2025). We used comma-separated words and two examples in one plain-text format. At positions where the rule is abstracted, at layers 11 to 14, one state group's frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference; four groups carried 0.50 to 0.56 and sixteen 0.67 to 0.78. One direction found with supervision carried 0.78 to 0.89; a random 64-dimensional subspace carried 0.01 to 0.02.
+The first three rows use the neutral wording from which we measured the direction. On two other neutral sentences the same vector increased the rate of `raise` or `isinstance` by +4.2 and +6.5 percentage points at the mean dose. At twice the dose the increases were +28.7 [19.4, 38.9] and +14.8 [8.3, 21.8] points, respectively. Most lost valid cases were inputs such as an empty list or string that the function rejected where the specification was silent.
 
-Shifting inside group 12112's frame at `resid_post.13` by the mean difference between rules flipped ABA to ABB in 0.45 of prompts, or 0.98 at twice the shift. ABB to ABA reached 0.03, or 0.67 at twice the shift. We ranked units using rule labels; the result covers one text format, and the model did not solve the task inside its chat template.
+**ABA and ABB rules.** In the task from Yang et al. (2025), the third item repeats the first in ABA and the second in ABB. At that item, one direction in group 12487's plane tracks repetition and another distinguishes which word repeats. Layer-15 attention head 14 reads both and writes at the answer position. We shifted the mixer's input within group 12487's frame. Moving toward the other rule reproduced 0.24 to 0.39 of the unedited mean difference between rules inside four frames at the answer position. Along the full rule direction the fractions were 0.20 and 0.26 for the two edit directions. An equal move in one randomly drawn frame gave 0.03 to 0.12 inside the four frames.
 
-**JavaScript comparison.** At layer 7 of a hand-traced ternary-expression circuit, the MLP reconstruction carried 0.89 of the MLP's contribution, with an interval of 0.78 to 1.00. Transform 357, rank 64, ranked first. The 0.89 is a share of the MLP's own contribution, which is 0.083 of the answer under an output swap. Two MLP neurons carried 0.80 of the same contribution.
+Across histories with different numbers of ABA, ABB and ABC lines (three distinct words), the whole residual at `resid_mid.15` lay near a plane at the answer position. Head 14's write accounted for 0.53 of the variation between histories. The whole mixer, including that head, accounted for 0.80 and the incoming residual for 0.20.
+
+We also ranked groups using the rule labels in prompts with two examples of comma-separated words. At layers 11 to 14, one frame carried 0.18 to 0.42 of the effect of swapping the whole residual difference at the positions where the rule is abstracted. Four groups carried 0.50 to 0.56 and sixteen carried 0.67 to 0.78. One direction chosen with supervision carried 0.78 to 0.89 and a random 64-dimensional subspace carried 0.01 to 0.02. Shifting inside group 12112's frame at `resid_post.13` by the mean difference between rules flipped ABA to ABB in 0.45 of prompts, or 0.98 at twice the shift. The reverse flip reached 0.03, or 0.67 at twice the shift. These measurements used one plain-text format. The model did not solve the task in its chat template.
+
+**Digit comparison.** We compared digits in the same slot on successive lines of dates or weights. At `resid_mid.7`, one axis in group 9719's frame separates smaller from larger and another separates equal digits. Transform 357 reads less and transform 472 reads greater. Projected into this frame, their read directions have cosine -0.90. Their full read directions have cosine +0.06. The frame holds 0.15 of 357's squared read length and 0.25 of 472's. It supplies 0.23 of 357's gate-input variance on lists and 0.21 in JavaScript, compared with 0.67 and 0.51 for 472. Group 5915 contributes more to 357 (0.51 on lists and 0.49 in JavaScript).
+
+**A randomly drawn group.** Among groups drawn at random, group 15417 at `resid_post.27` separated “vital” from death words. In each of six sentence templates we moved “vital” inside the frame to match one coordinate of “fatal”, “deadly”, “lethal” or “mortal”. We summed next-token probabilities over each of two sets of eight nouns. The log ratio of those sums shifted toward the death-word set in all 24 pairs, by +1.41 nats on average, covering 0.24 of the original gap. “Mistake” and “accident” are members of that set. Equally sized random moves gave changes from -0.28 to +0.07 nats.
+
+In the template “It was a W”, all 41 adjectives had negative values on the second coordinate of the learned frame. “Vital”, “fatal” and “pivotal” had the most negative values.
+
+**Python rule completion.** We chose group 9167 by comparing prompts with and without the instruction “Reply with code only.” Shifting the state within its frame at `resid_mid.27` just before the function body led the model to reason in comments. At a fixed dose, the correct-rule rate rose from 0.516 to 0.773 on 24 held-out rule families (1,536 generations, one greedy and one sampled per prompt). Of 768 greedy answers, 23 became wrong and 232 became correct. In 96 separate generations a random group changed the rate by -0.01. Forcing the first body token to `#` gave a similar rate, 0.65 against 0.72 with the unit, with the difference inside the interval.
+
+**JavaScript comparison.** In a hand-traced ternary expression, swapping the layer-7 MLP output gave a patch share of 0.083, the fraction of the paired prompts' mean answer-margin gap reproduced by that swap. The MLP reconstruction carried 0.89 of the MLP's contribution (interval 0.78 to 1.00). Transform 357, rank 64, ranked first. Two MLP neurons carried 0.80 of the same MLP contribution.
 
 ### How the published files were checked
 

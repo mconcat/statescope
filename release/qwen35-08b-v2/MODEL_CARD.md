@@ -5,7 +5,7 @@ base_model: Qwen/Qwen3.5-0.8B
 
 # Qwen3.5-0.8B per-layer dictionaries
 
-This is the statescope set for Qwen3.5-0.8B: two dictionaries for every layer and a Python reader. statescope reads a language model's computation through per-layer state dictionaries and MLP transform dictionaries; sets for other models are planned. The state dictionary writes the residual stream (the vector layers pass along) as a few active groups of directions. The MLP (multilayer perceptron) dictionary writes the layer's MLP as a sum of small gated linear operations called transforms; gates control when and how strongly they act.
+This statescope set for Qwen3.5-0.8B has two dictionaries for every layer and a Python reader. Sets for other models are planned. The state dictionary reconstructs the residual stream, the vector layers pass along, using a few active groups, each a set of four learned directions selected together. Those directions form its frame, and a token's four coordinates in the frame are its code. The MLP (multilayer perceptron) dictionary reconstructs the layer's MLP output as a sum of transforms, low-rank linear operations on the input. Each transform has a gate that opens when a reading along one input direction exceeds a learned threshold. The gate scales the transform's write.
 
 ### What you can do with it
 
@@ -16,19 +16,21 @@ This is the statescope set for Qwen3.5-0.8B: two dictionaries for every layer an
 
 ### An example: how the model decides to break a line
 
-With text wrapped at a fixed width, the model must place line breaks by tracking how long the current line is. The task comes from Gurnee et al. (2026), who studied how Claude 3.5 Haiku does this. Here we follow it in a different model, Qwen3.5-0.8B, where one head of a GatedDeltaNet layer carries the count.
+Gurnee et al. (2026) studied how Claude 3.5 Haiku counts characters in wrapped text. In Qwen3.5-0.8B, recurrent head 10 of the layer-9 mixer, the sublayer that combines information across tokens, acts as a clock. The first token of each line resets it. The sum of the logarithms of the head's memory decay factors then falls linearly with character count.
 
-1. Layer-8 transform 189 fires on the first token of a line.
-2. State group 11586 holds most of that signal.
-3. Head 10 of the layer-9 mixer carries the count. A mixer is a layer's GatedDeltaNet or attention sublayer, the part that combines information across tokens.
-4. Layer-9 transforms read it mostly through state group 4885.
-5. Transform 410 is on while the line is short; transform 1749 turns on when it is long. They turn the count into the line-break decision.
+We trained the dictionaries without the counting task. On paired texts ending on the same words, we varied the count at widths 60 and 100, or the width of earlier lines from 100 to 175. We ranked all 16,384 layer-9 groups by the fraction of the squared change in mixer output inside each frame. Group 4885 ranked first on both halves in each condition. The group's mean code traces a nearly planar curve as the count increases.
 
-The test swaps in values from a second version of the same text, wrapped at 60 characters so its last line is about half full and no line break is due. Swapping only the first transform's contribution through the mixer reproduces 0.328 of the average change in the model's preference for newline over space. Swapping the whole layer-8 MLP output the same way reproduces 0.353 of that change. In this setting, one transform out of 3,968 moves the answer about as much as the whole MLP output of its layer. These demonstration numbers are exact for the tested library versions (torch 2.11.0+cu128, transformers 5.20.2); with newer versions, the reported fractions moved by up to about 0.01.
+Layer-8 transform 189 marks the first token of a line and writes mostly into group 11586's frame. At width 60, swapping its write through the mixer gave a patch share of 0.328, the fraction of the paired texts' mean gap in preference for newline over space reproduced by the swap. Swapping the whole layer-8 MLP output gave 0.353. Layer-9 transforms 410 and 1749 read different directions in the count curve's plane and fire on short and long lines, respectively.
 
-The two dictionaries also show how layer 9 turns the count into the decision. The count is a position along a curve in a plane inside state group 4885's four-dimensional frame. Transforms 410 and 1749 each read that plane along their own direction and compare the reading with a threshold.
+Layer-12 head 13 reads the width of earlier lines from memory. Its output gate scales that read according to the current count. Its write brings mean states at equal distances from the line end closer together across widths. At all five widths we tested, layer-13 transform 2490's mean gate input crosses its threshold 2 to 8 characters before the end.
 
-We found this chain; `demo/line_count.py` re-measures it from published files in under two minutes.
+We held the text at width 100 and added the width-40 mean read minus the width-100 mean read to head 13's normalized memory read. The line-break margin measures preference for newline over space in logits. From count ten onward, the smoothed mean margin first reached -3 at 86.6 characters without an edit and at 39.7 with the head edit.
+
+We split the resulting change at `resid_mid.12`, the residual stream between mixer and MLP. The part inside group 15458's frame alone gave a crossing of 41.0. The rest alone gave 86.5. At counts 1 to 40 we shifted the group's code directly by its width-40 minus width-100 mean code at that count. This state edit gave 33.5. Permuting the head edit's channels gave 86.0.
+
+We prompted the model with the first eight lines of 96 new documents wrapped at width 100. The median completed line in the generated text was 86 characters without an edit, 43 with the head edit, 43 with its in-frame part and 37 with the state edit. With the same documents wrapped at 40, the unedited median was 34. Permuting the head edit's channels gave a median of 79. The mean stayed near the unedited width-100 value (69.6 against 69.7 characters).
+
+On 64 new document pairs per condition, we projected the layer-9 mixer change into each subspace and passed it through six MLP transforms. For count at width 60, count at width 100 and the change in width, group 4885's frame retained 90.2%, 85.1% and 97.5% of the full change's effect on the mean margin along that route. Four decoder directions from a scalar sparse autoencoder (SAE), chosen one at a time on the original pairs, retained 87.1%, 91.0% and 95.3%. Four principal components fitted to those pairs' mixer changes retained 99.5%, 99.3% and 96.3%. [Figures from the counting study](https://statescope.ai/#example)
 
 ### Try it
 
@@ -60,7 +62,10 @@ File and demonstration checks:
 ```sh
 python demo/verify_release.py --release <folder>
 python demo/line_count.py --release <folder>
+python demo/width_memory.py --release <folder> --device cuda:0 --out <output-folder>
 ```
+
+`line_count.py` re-measures the path through layers 8 and 9 in under two minutes on one RTX 5090. `width_memory.py` computes the layer-12 edits from the shipped texts. For each of seven conditions it prints the relative edit size, the crossing, the mean margin at counts 48–50 and the margin before a line break. On one RTX 5090 the width demonstration took 64 seconds the first time and 30 seconds on subsequent runs.
 
 ### What is in the box
 
@@ -68,7 +73,7 @@ python demo/line_count.py --release <folder>
 - The 144 weight and config files cover 24 layers; the other files are the manifest and model card.
 - Each state dictionary activates 24 of 16,384 groups per token.
 - Each MLP dictionary has 3,968 transforms.
-- Mixers (a layer's GatedDeltaNet or attention sublayer) are read directly, at the level of the model's own heads and channels; the dictionaries cover the residual stream and the MLPs. We also trained a stateful transcoder on 18 GatedDeltaNet layers of this model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer.
+- We read mixers (GatedDeltaNet or attention) directly through the model's heads and channels. The dictionaries cover the residual stream and the MLPs. We also trained a stateful transcoder on 18 GatedDeltaNet layers of this model. It reproduced 33 to 47 percent of the counting head's response to a swap of the layer-8 MLP output and 68 to 74 percent of its response to a swap of the whole residual. The counting head (layer 9, head 10) carried the count about as well as the whole mixer.
 
 A larger set for Qwen3.5-4B is published separately: [Qwen3.5-4B](https://huggingface.co/mconcat/statescope-qwen3.5-4b).
 
@@ -366,6 +371,14 @@ We registered the pass rule before measurement: in both count cells, the frame r
 Along transform 410's direction, the middle of the curve sticks out: its frame part is largest at about 30 characters and falls toward the end of the line, and its firing rate follows (0.86 to 0.92 at 20 to 40 characters and 0.27 at 60 in the 60-character texts). Along transform 1749's direction, only the far end of the curve sticks out: in the 100-character texts its gate input passes the threshold after about 90 characters (firing rate 0.35 at 90 and 0.76 at 100), and in the 60-character texts it never does. A gate is open when its input is above its threshold, 0.536 for transform 410 and 0.527 for transform 1749. So at layer 9 the step from count to line-break decision reads as a geometric operation: the count is a position on a curve in a plane inside one state group's frame, and each of the two transforms reads that plane along its own direction and compares the reading with a threshold.
 
 These are means by count; single tokens scatter around them. The frame part gives most of the movement of the gate input, not all of it. Over the counts of a line, the mean gate input of transform 410 moves over a range of 1.47 (60 characters) and 2.64 (100 characters), and its frame part over 1.20 and 1.52. For transform 1749 the ranges are 2.21 and 3.10 for the gate input and 1.47 and 2.63 for the frame part; the rest comes from other parts of the residual stream.
+
+**The width intervention at layer 12.** We compute the shifts in head 13's memory read and group 15458's code from the shipped texts. We measure the line-break margin at 31,564 word-final tokens from the third line onward in 96 texts wrapped at 100 characters.
+
+```sh
+python demo/width_memory.py --release <folder> --device cuda:0 --out <output-folder>
+```
+
+The script prints the seven fixed-text conditions with each edit's RMS divided by the mixer output's RMS, the first crossing of -3 by the smoothed mean margin, the mean margin at counts 48–50 and the margin before a line break. It also reports the fraction of the head edit's squared length inside group 15458's frame (0.848). On one RTX 5090 it took 64 seconds on the first run and 30 seconds on subsequent runs, with peak GPU memory of 3.5 GiB.
 
 ### How the published files were checked
 
