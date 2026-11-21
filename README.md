@@ -104,7 +104,7 @@ hf download mconcat/statescope-qwen3.5-4b --local-dir <folder>
 This command downloads one layer of the 4B set:
 
 ```sh
-hf download mconcat/statescope-qwen3.5-4b --include "state/L16/*" "mlp/L16/*" MANIFEST.json --local-dir <folder>
+hf download mconcat/statescope-qwen3.5-4b --include "state/L16/*" --include "mlp/L16/*" --include MANIFEST.json --local-dir <folder>
 ```
 
 This command downloads the 0.8B weights:

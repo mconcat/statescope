@@ -29,7 +29,7 @@ In the [code checkout](https://github.com/mconcat/statescope), these commands in
 
 ```sh
 pip install -e '.[model]'
-hf download mconcat/statescope-qwen3.5-4b --include "state/L16/*" "mlp/L16/*" MANIFEST.json --local-dir <folder>
+hf download mconcat/statescope-qwen3.5-4b --include "state/L16/*" --include "mlp/L16/*" --include MANIFEST.json --local-dir <folder>
 ```
 
 The full download is about 168 GiB (180 gigabytes, GB).
