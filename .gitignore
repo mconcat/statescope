@@ -11,6 +11,7 @@ test_out/
 *.safetensors
 # ...except the demonstration's item pairs (token ids, 0.6 MB)
 !demo/line_count_items.safetensors
+!demo/width_memory_texts.safetensors
 *.egg-info/
 tests/local.env
 # working notes (never committed)

@@ -63,10 +63,11 @@ The transcoder with 192 active latents also detected count ranges, with several 
 
 ## What you can reproduce
 
-The executable trace covers the **early L8–L9 counting pathway on 0.8B**. For the [later width intervention](https://statescope.ai/#evidence) and [4B steering experiment](https://statescope.ai/#prompt-states), we publish [the figure data](https://github.com/mconcat/statescope-site/tree/main/data). The analysis scripts for those two results and the dictionary training code are unpublished. Both studies used the Qwen3.5 family. Generalization to other model families remains open.
+Two commands remeasure the early L8–L9 counting pathway and the [width intervention at layer 12](https://statescope.ai/#evidence) in the 0.8B line-counting study. For the [4B steering experiment](https://statescope.ai/#prompt-states), we publish [the figure data](https://github.com/mconcat/statescope-site/tree/main/data). The 4B analysis script and the dictionary training code are unpublished. Both studies used the Qwen3.5 family. Generalization to other model families remains open.
 
 - `python demo/verify_release.py --release <folder>` checks a download of either set against its manifest.
 - `python demo/line_count.py --release <folder>` remeasures the early counting pathway.
+- `python demo/width_memory.py --release <folder>` remeasures the width intervention at layer 12 on 0.8B.
 - `pytest -m "not legacy"` runs the 36 tests that need no private data.
 
 ## Install
@@ -259,12 +260,36 @@ Further findings:
 
 </details>
 
+## Demonstration: the width intervention at layer 12
+
+We edit the layer-12 mixer output to move GatedDeltaNet head 13's memory read or state group 15458's code from width 100 toward width 40. The script computes its edit vectors from the shipped texts.
+
+We measure the margin at 31,564 word-final tokens in lines 3 and later of 96 texts wrapped at 100 characters. The margin is the line-break token's logit minus the logsumexp of logits for tokens starting with a space. The crossing is the character count where the mean margin, smoothed over three neighbouring counts, first reaches -3.
+
+```sh
+python demo/width_memory.py --release <folder with state/ and mlp/> --device cuda:0 --out <folder>
+```
+
+On one RTX 5090 the script took 64 seconds the first time and 30 seconds after that. Peak GPU memory was 3.5 GiB.
+
+| Edit | Size | Crossing | Margin at counts 48–50 | Margin before a line break |
+|---|---|---|---|---|
+| no edit | 0 | 86.6 | -6.53 | 0.08 |
+| head 13's memory read moved to width 40 | 0.266 | 39.7 | -2.41 | -2.02 |
+| the same with its channels permuted | 0.587 | 86.0 | -5.94 | 0.22 |
+| only the part inside group 15458's frame | 0.243 | 41.0 | -2.50 | -1.98 |
+| the rest | 0.108 | 86.5 | -6.40 | -0.03 |
+| group 15458's code moved to width 40 | 0.141 | 33.5 | -4.98 | -0.16 |
+| the same size along a random direction | 0.141 | 87.0 | -6.29 | -0.01 |
+
+Size is the edit's RMS divided by the mixer output's RMS. 0.848 of the head edit's squared norm lies inside the frame. The state edit acts at counts 1 to 40 and gives a margin curve with a different shape from the head edit's.
+
 ## Repository layout
 
 - `src/statescope/reader.py` contains the reader.
 - `src/statescope/config.py` defines the two models, and `src/statescope/lm.py` loads the language model.
 - `src/statescope/heldout.py` and `src/statescope/metrics.py` are used by the measuring tools and tests.
-- `demo/line_count.py` runs the demonstration, and `demo/verify_release.py` checks the weights. `demo/line_count_items.safetensors` holds the demonstration items.
+- `demo/line_count.py` runs the early counting demonstration with paired texts from `demo/line_count_items.safetensors`. `demo/width_memory.py` runs the width intervention at layer 12 with texts from `demo/width_memory_texts.safetensors`. `demo/verify_release.py` checks the weights.
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
 - `devtools/` holds tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
