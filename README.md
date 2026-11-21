@@ -26,10 +26,22 @@ A group is a set of 4 directions in a state dictionary. A frame is the orthonorm
 
 ## What the baselines show
 
-There are several ways to find the count signal. In an earlier exploratory comparison on the same 0.8B line-wrapping task, **eight native MLP neurons recovered essentially the full effect of patching the layer-9 MLP output**. Eight selected latents from three conventional TopK transcoders recovered 26% to 68%, depending on the transcoder. Eight transforms from three earlier MOLT configurations recovered 31% to 48%.
+We compared the released layer-9 state dictionary with a scalar TopK sparse autoencoder (SAE) on the same mixer changes. On odd-indexed pairs from the public demo, we chose the BSF group whose subspace captured the largest share of the change in mixer output, measured by squared length. For the SAE, we chose decoder directions one at a time by the same criterion. We also fitted principal components to the same uncentered changes. We held each choice fixed for 64 new document pairs per condition.
+
+The table shows how much of the full mixer intervention’s effect on the mean line-break margin remained when we projected the change into each subspace and passed it through the same six MOLT transforms.
+
+| State subspace | Count at width 60 | Count at width 100 | Width changed from 100 to 175 |
+|---|---:|---:|---:|
+| One learned BSF group | 90.2% | 85.1% | 97.5% |
+| Four scalar SAE decoder directions | 87.1% | 91.0% | 95.3% |
+| Four principal components (PCA) | 99.5% | 99.3% | 96.3% |
+
+For the scalar SAE, we assembled a four-dimensional subspace from individual decoder directions. The state dictionary supplied four directions together as one learned group. All three conditions picked out the same group (4885). On 192 new documents, changes confined to its subspace preserved **85.1–97.5%** of the full mixer intervention’s effect through six selected MLP transforms. [Measurements and 95% paired bootstrap intervals](docs/l9-state-subspaces.csv)
 
 <details>
-<summary>Layer-9 comparison on 256 test pairs</summary>
+<summary>Earlier MLP neuron and transcoder comparison on 256 test pairs</summary>
+
+There are several ways to find the count signal. In an earlier exploratory comparison on the same 0.8B line-wrapping task, **eight native MLP neurons recovered essentially the full effect of patching the layer-9 MLP output**. Eight selected latents from three conventional TopK transcoders recovered 26% to 68%, depending on the transcoder. Eight transforms from three earlier MOLT configurations recovered 31% to 48%.
 
 We revised the ranking procedure after inspecting initial results. For the reported comparison, we ranked units on pairs from odd-numbered source lines and patched their writes on pairs from even-numbered lines. Each value is the mean change in line-break margin from patching the selected writes, divided by the mean change from patching the whole layer-9 MLP output. The columns hold the number of patched units fixed. Transforms can have higher rank than individual neurons or transcoder latents.
 
@@ -45,9 +57,9 @@ We revised the ranking procedure after inspecting initial results. For the repor
 
 These exploratory runs used earlier dictionaries and a separate evaluation set. The figure above uses the released weights and measures the effect along a selected six-transform path. [Baseline measurements by number of patched units](docs/l9-count-baselines.csv)
 
-</details>
+The transcoder with 192 active latents also detected count ranges, with several latents responding to overlapping ranges. For the recurrent step, an earlier stateful transcoder trained on 18 GatedDeltaNet layers reproduced about one third of the counting head’s response. We therefore read that step directly from the model’s head.
 
-The transcoder with 192 active latents also detected count ranges, with several latents responding to overlapping ranges. With the released dictionaries we could ask a further question. How much of the six transforms’ effect survives if we keep only the change along one learned state subspace? The figure above shows that intervention. For the recurrent step, an earlier stateful transcoder trained on 18 GatedDeltaNet layers reproduced about one third of the counting head’s response. We therefore read that step directly from the model’s head. A matched end-to-end comparison with a conventional scalar sparse autoencoder remains open.
+</details>
 
 ## What you can reproduce
 
