@@ -1,0 +1,71 @@
+component,selected_units,share_of_full_l9_mlp_patch
+Native MLP neurons,1,0.12250914424657822
+Native MLP neurons,2,0.4238663613796234
+Native MLP neurons,3,0.5885363221168518
+Native MLP neurons,5,0.8826412558555603
+Native MLP neurons,8,0.9998637437820435
+Native MLP neurons,12,0.9998078346252441
+Native MLP neurons,20,1.001867651939392
+Native MLP neurons,30,1.0024150609970093
+Native MLP neurons,50,1.005082607269287
+Native MLP neurons,100,1.0093345642089844
+Earlier MOLT (186 transforms),1,0.22234901785850525
+Earlier MOLT (186 transforms),2,0.4057067334651947
+Earlier MOLT (186 transforms),3,0.4076508581638336
+Earlier MOLT (186 transforms),5,0.4073660671710968
+Earlier MOLT (186 transforms),8,0.407868355512619
+Earlier MOLT (186 transforms),12,0.4095701277256012
+Earlier MOLT (186 transforms),20,0.41127699613571167
+Earlier MOLT (186 transforms),30,0.4111955165863037
+Earlier MOLT (186 transforms),50,0.41044703125953674
+Earlier MOLT (186 transforms),100,0.41229358315467834
+"Earlier MOLT (41,484 transforms)",1,0.21363390982151031
+"Earlier MOLT (41,484 transforms)",2,0.30603304505348206
+"Earlier MOLT (41,484 transforms)",3,0.30452603101730347
+"Earlier MOLT (41,484 transforms)",5,0.30630403757095337
+"Earlier MOLT (41,484 transforms)",8,0.3055295944213867
+"Earlier MOLT (41,484 transforms)",12,0.30547741055488586
+"Earlier MOLT (41,484 transforms)",20,0.30822324752807617
+"Earlier MOLT (41,484 transforms)",30,0.309819757938385
+"Earlier MOLT (41,484 transforms)",50,0.31081855297088623
+"Earlier MOLT (41,484 transforms)",100,0.3651260733604431
+"Same 41,484-transform design with per-transform offsets",1,0.23902173340320587
+"Same 41,484-transform design with per-transform offsets",2,0.42203769087791443
+"Same 41,484-transform design with per-transform offsets",3,0.4321548640727997
+"Same 41,484-transform design with per-transform offsets",5,0.4809249937534332
+"Same 41,484-transform design with per-transform offsets",8,0.4819469749927521
+"Same 41,484-transform design with per-transform offsets",12,0.4822978377342224
+"Same 41,484-transform design with per-transform offsets",20,0.47972995042800903
+"Same 41,484-transform design with per-transform offsets",30,0.48093363642692566
+"Same 41,484-transform design with per-transform offsets",50,0.48212096095085144
+"Same 41,484-transform design with per-transform offsets",100,0.47986361384391785
+"TopK transcoder, 11 active latents",1,0.17474980652332306
+"TopK transcoder, 11 active latents",2,0.292057603597641
+"TopK transcoder, 11 active latents",3,0.29268068075180054
+"TopK transcoder, 11 active latents",5,0.28559181094169617
+"TopK transcoder, 11 active latents",8,0.28080326318740845
+"TopK transcoder, 11 active latents",12,0.36691299080848694
+"TopK transcoder, 11 active latents",20,0.3686932325363159
+"TopK transcoder, 11 active latents",30,0.3677191734313965
+"TopK transcoder, 11 active latents",50,0.3680083751678467
+"TopK transcoder, 11 active latents",100,0.369191974401474
+"TopK transcoder, 192 active latents",1,0.010442088358104229
+"TopK transcoder, 192 active latents",2,0.044696517288684845
+"TopK transcoder, 192 active latents",3,0.08120148628950119
+"TopK transcoder, 192 active latents",5,0.15653203427791595
+"TopK transcoder, 192 active latents",8,0.26378387212753296
+"TopK transcoder, 192 active latents",12,0.36553844809532166
+"TopK transcoder, 192 active latents",20,0.5007296800613403
+"TopK transcoder, 192 active latents",30,0.5529959201812744
+"TopK transcoder, 192 active latents",50,0.5831624269485474
+"TopK transcoder, 192 active latents",100,0.6092520952224731
+"TopK transcoder, 900 active latents",1,0.10149487853050232
+"TopK transcoder, 900 active latents",2,0.258599191904068
+"TopK transcoder, 900 active latents",3,0.32618802785873413
+"TopK transcoder, 900 active latents",5,0.5374618172645569
+"TopK transcoder, 900 active latents",8,0.6767910122871399
+"TopK transcoder, 900 active latents",12,0.6822256445884705
+"TopK transcoder, 900 active latents",20,0.6815927624702454
+"TopK transcoder, 900 active latents",30,0.681416392326355
+"TopK transcoder, 900 active latents",50,0.6819515228271484
+"TopK transcoder, 900 active latents",100,0.6827967762947083

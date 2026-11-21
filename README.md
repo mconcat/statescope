@@ -1,16 +1,19 @@
 # statescope
 
-statescope is a method and reader that uses per-layer state dictionaries of the residual stream and MLP dictionaries of gated low-rank transforms to read a language model's computation as a circuit of state groups and transforms. Sets published so far cover `Qwen/Qwen3.5-4B` (32 layers, 9,920 MLP transforms per layer) and `Qwen/Qwen3.5-0.8B` (24 layers, 3,968 MLP transforms per layer, with a traced demonstration), with sets for more models to follow.
+statescope traces what a language model represents in its hidden states and which operations use that information. We use [Fel et al.’s block-sparse featurizer (BSF)](https://arxiv.org/abs/2606.25234) for residual states and the [public MOLT code](https://github.com/Goreg12345/crosslayer-transcoder/tree/376fabe32ec827e790fcef5b27db1f7aefc188c3) for MLP operations. We release these separately trained dictionaries for **every layer of Qwen3.5-0.8B and Qwen3.5-4B**, with a reader and two studies that test how the states affect predictions. The first builds on [Gurnee et al.’s line-wrapping task](https://arxiv.org/abs/2601.04480).
 
-**You can reproduce**
+- **From characters counted to space remaining.** A recurrent head tracks how many characters have been written. A later memory update brings together positions with the same space left across different line widths. Editing that memory shifts the model’s next-token preference for a line break toward earlier positions. [Follow the 0.8B trace](https://statescope.ai/#example)
+- **From a prompt edit to later Python code.** We asked for functions such as turning “Hello World” into “HW”. We kept the wording fixed and edited one state direction as the model read a neutral sentence. Across 72 tasks, outputs containing `raise` or `isinstance()` rose from 31.9% to 48.6% when the edit matched the mean shift from an explicit input-validation instruction. [Compare the 4B prompts and generated functions](https://statescope.ai/#prompt-states)
 
-- `python demo/verify_release.py --release <folder>` checks a download of either set against its manifest.
-- `python demo/line_count.py --release <folder>` re-runs the traced line-count chain on the 0.8B set for the model's line-break decision, from one layer-8 MLP transform through one state group, the model's layer-9 mixer and a second state group to two layer-9 MLP transforms.
-- `pytest -m "not legacy"` runs the 36 tests that need no private data.
+[![Line-count task at width 60. The share of the mean line-break margin gap carried through six layer-9 MLP transforms was 0.320 for the full mixer swap, 0.300 for the part inside a learned four-dimensional state frame, and at most 0.003 in absolute value for five random frames.](docs/l9-frame.png)](https://statescope.ai/#mixer-to-mlp)
+
+In the counting example, we swapped the layer-9 mixer output between paired texts. Keeping only the change inside one learned four-dimensional subspace preserved **94%** of the full swap’s effect through six selected MLP transforms (0.300 / 0.320). Other components still affected the decision through other paths. [Interactive figure](https://statescope.ai/#mixer-to-mlp) · [Measurements for all three conditions](release/qwen35-08b-v2/line_count_link_table.md)
+
+[Read the interactive article](https://statescope.ai/) · [Download weights](#what-this-is) · [Run the demo](#demonstration-line-counting)
 
 ## What this is
 
-statescope provides a method and a reader in one Python file for reading a language model's computation through per-layer state and MLP dictionaries. Sets are published so far for `Qwen/Qwen3.5-4B`, with 32 layers and 9,920 MLP transforms per layer, and `Qwen/Qwen3.5-0.8B`, with 24 layers and 3,968 MLP transforms per layer and a traced demonstration. In both sets, each layer has a state dictionary and an MLP dictionary that were trained separately. Sets for more models, including Gemma, will follow.
+Each layer has a dictionary for the residual stream and another for the MLP. The reader exposes the coordinates of a token inside a state group, the transforms that fire, and the vectors they write. You can follow a signal from one to the next and test the proposed path against the model’s own heads. More model releases, including Gemma, are planned.
 
 | Base model | Layers | Width | Groups per state dictionary / active groups per token | MLP transforms per layer | Size | Weights |
 |---|---|---|---|---|---|---|
@@ -19,11 +22,40 @@ statescope provides a method and a reader in one Python file for reading a langu
 
 In the Qwen3.5 models, a mixer is a layer's GatedDeltaNet or attention sublayer. A residual stream site is a location between the mixer and the MLP or after the MLP where a state dictionary reads the residual stream. A state dictionary represents the residual stream at both of these sites. An MLP dictionary represents the layer's MLP operations, taking the post-norm MLP input and reconstructing the raw MLP output.
 
-By design, the mixers are read directly at the level of the model's own heads and channels. We also trained a stateful transcoder, a dictionary with a state carried across tokens, on 18 GatedDeltaNet layers of the 0.8B model: in the line-counting computation it reproduced about one third of the true head's response, while one of the model's own heads (layer 9, head 10) carried the count about as well as the whole mixer. Attention is read at the level of heads.
-
 A group is a set of 4 directions in a state dictionary. A frame is the orthonormal basis of a group's 4-dimensional write subspace. A code gives a token's coordinates in that frame, multiplied by a per-group scale. A transform is a linear operation in an MLP dictionary with its own read and write matrices. Its write is what it adds to the MLP output. A gate controls a transform through a learned threshold on its pre-activation.
 
-The repository contains the reader, a demonstration and tests.
+## What the baselines show
+
+There are several ways to find the count signal. In an earlier exploratory comparison on the same 0.8B line-wrapping task, **eight native MLP neurons recovered essentially the full effect of patching the layer-9 MLP output**. Eight selected latents from three conventional TopK transcoders recovered 26% to 68%, depending on the transcoder. Eight transforms from three earlier MOLT configurations recovered 31% to 48%.
+
+<details>
+<summary>Layer-9 comparison on 256 test pairs</summary>
+
+We revised the ranking procedure after inspecting initial results. For the reported comparison, we ranked units on pairs from odd-numbered source lines and patched their writes on pairs from even-numbered lines. Each value is the mean change in line-break margin from patching the selected writes, divided by the mean change from patching the whole layer-9 MLP output. The columns hold the number of patched units fixed. Transforms can have higher rank than individual neurons or transcoder latents.
+
+| Component patched | 2 selected units | 8 selected units |
+|---|---:|---:|
+| Native MLP neurons | 0.42 | 1.00 |
+| Earlier MOLT (186 transforms) | 0.41 | 0.41 |
+| Earlier MOLT (41,484 transforms) | 0.31 | 0.31 |
+| Same 41,484-transform design with per-transform offsets | 0.42 | 0.48 |
+| TopK transcoder, 11 active latents | 0.29 | 0.28 |
+| TopK transcoder, 192 active latents | 0.04 | 0.26 |
+| TopK transcoder, 900 active latents | 0.26 | 0.68 |
+
+These exploratory runs used earlier dictionaries and a separate evaluation set. The figure above uses the released weights and measures the effect along a selected six-transform path. [Baseline measurements by number of patched units](docs/l9-count-baselines.csv)
+
+</details>
+
+The transcoder with 192 active latents also detected count ranges, with several latents responding to overlapping ranges. With the released dictionaries we could ask a further question. How much of the six transforms’ effect survives if we keep only the change along one learned state subspace? The figure above shows that intervention. For the recurrent step, an earlier stateful transcoder trained on 18 GatedDeltaNet layers reproduced about one third of the counting head’s response. We therefore read that step directly from the model’s head. A matched end-to-end comparison with a conventional scalar sparse autoencoder remains open.
+
+## What you can reproduce
+
+The executable trace covers the **early L8–L9 counting pathway on 0.8B**. For the [later width intervention](https://statescope.ai/#evidence) and [4B steering experiment](https://statescope.ai/#prompt-states), we publish [the figure data](https://github.com/mconcat/statescope-site/tree/main/data). The analysis scripts for those two results and the dictionary training code are unpublished. Both studies used the Qwen3.5 family. Generalization to other model families remains open.
+
+- `python demo/verify_release.py --release <folder>` checks a download of either set against its manifest.
+- `python demo/line_count.py --release <folder>` remeasures the early counting pathway.
+- `pytest -m "not legacy"` runs the 36 tests that need no private data.
 
 ## Install
 
@@ -113,6 +145,9 @@ write = M.transform_write(acts["resid_mid"], 410)        # what transform 410 ad
 
 The 4B model in bf16 plus one layer's two dictionaries needed more than 14 GiB of GPU memory. The 0.8B set is read the same way with `Qwen/Qwen3.5-0.8B` and its own folder, with 3,968 transforms per layer and layers 0 to 23.
 
+<details>
+<summary>Dictionary architecture, training settings and reconstruction measurements</summary>
+
 The state dictionary covers `resid_mid.L` and `resid_post.L`. The former is the input of the norm before the MLP. The latter is `resid_mid` plus the MLP output. The dictionary uses the Grassmannian block-sparse featurizer (BSF) of [Fel et al. (2026)](https://arxiv.org/abs/2606.25234). Each of its 16,384 groups reads and writes through the same orthonormal frame, with one learned scale per group. At each token, the 24 groups with the largest written norm are active. The input is divided by its own size using `x * rsqrt(mean(x^2) + eps)`, with `eps = 1e-6`. It is then standardised with a mean vector and one scale per site. The raw residual reconstruction multiplies the reconstruction in those units by the token's own `sqrt(mean(x^2) + eps)`. `StateVocab.reconstruct(x, site)` handles both steps. Each layer's dictionary was trained on 30,003,200 tokens over 7,325 steps.
 
 The MLP dictionary uses the sparse mixture of linear transforms, or MOLT, from the public `crosslayer-transcoder` code. It has 9,920 transforms in the 4B set and 3,968 in the 0.8B set, in five rank tiers. The 4B set has 320 transforms of rank 128, 640 of rank 64, 1,280 of rank 32, 2,560 of rank 16 and 5,120 of rank 8. The 0.8B set has 128 transforms of rank 128, 256 of rank 64, 512 of rank 32, 1,024 of rank 16 and 2,048 of rank 8. It uses a JumpReLU gate. Each transform has free read and write matrices. There is no skip connection. Training uses a tanh sparsity penalty. `PublicMolt` applies the layer's own RMSNorm to raw `resid_mid` using coefficients in `postnorm.safetensors`. Training used 58,600 steps of 500 tokens, or 29.3 million tokens, per layer. The learning rate was 4.0e-05. The 4B set used a sparsity penalty coefficient of 3e-05 at all 32 layers. In the 0.8B set, the sparsity penalty coefficient was 7.5e-05 for layers 0 to 22. Layer 23 of the 0.8B set used 2.5e-05 in a separate run. A pre-activation within float rounding of its hard threshold can be on in one computation and off in another.
@@ -124,6 +159,8 @@ FVU means fraction of variance unexplained. It is squared reconstruction error d
 This repository measured raw FVU with and without position 0 for the 0.8B set. At layer 6, `resid_mid`, state FVU is 0.2524 with position 0 and 0.2184 without it. At layer 0, it is 0.0778 with position 0 and 0.0777 without it. For the MLP dictionary, the two differ by at most 0.014 at any layer.
 
 The state trainer's held-out FVU was recorded at training in `MANIFEST.json` as `heldout_fvu_own_units`. It uses the dictionary's per-token-RMS-normalised, site-standardised units. It includes position 0 on the first 4,096 tokens of each of four held-out splits. For the 0.8B set, the reader reproduces all 48 numbers within 6.9e-7. At early layers of the 0.8B set, this number is lower than the number on all tokens because the first 4,096 tokens are an easier subset, not because of position 0. At layer 0, `resid_mid`, it is 0.0533 on the subset against 0.0693 on all tokens in the same units, or 0.0777 in raw units. At layer 9, it is 0.2452 on the subset against 0.2438 on all tokens in the same units.
+
+</details>
 
 ## Qwen3.5-4B set
 
@@ -153,13 +190,16 @@ We found the following chain. The script uses our chosen transform, group and he
 
 1. Transform 189 of the L8 MLP dictionary fires on the first token of a line. Its write lies mostly inside the frame of state group 11586 of `resid_post.8`, the first-token-of-a-line group.
 2. The model's L9 mixer reads that write. Swapping only transform 189's write or only group 11586 moves the answer about as much as swapping the whole L8 MLP output in the count cells. GatedDeltaNet head 10 carries the count inside the mixer.
-3. Transforms 410 and 1749 of the L9 MLP dictionary turn the count into the line-break decision. Transform 410 is on while the line is short, and transform 1749 is on once it is long. What the L9 transforms read of the mixer's write lies mostly inside the 4-dimensional frame of state group 4885 of `resid_mid.9`. That part alone moves them about as much as the whole write. The rest moves them little but still reaches the answer through other routes. This is measured for the six selected L9 transforms (410, 1749, 6, 3720, 1394, 2275) together and for 410 and 1749 alone.
+3. Transforms 410 and 1749 of the L9 MLP dictionary read different parts of the count range and influence the line-break margin. Transform 410 is on while the line is short, and transform 1749 is on once it is long. What the L9 transforms read of the mixer's write lies mostly inside the 4-dimensional frame of state group 4885 of `resid_mid.9`. That part alone moves them about as much as the whole write. The rest moves them little but still reaches the answer through other routes. This is measured for the six selected L9 transforms (410, 1749, 6, 3720, 1394, 2275) together and for 410 and 1749 alone.
 
 This command remeasures the early L8–L9 line-count pathway. It ran in under two minutes on one RTX 5090, including model loading.
 
 ```sh
 python demo/line_count.py --release <folder with state/ and mlp/> --device cuda:0 --out <folder>
 ```
+
+<details>
+<summary>Patch results, unit selection, controls and pass criteria</summary>
 
 Each row below identifies a swap, and each column identifies a task cell. Each value is a share on even-numbered items, with the bootstrap interval from 2.5 % to 97.5 % in parentheses.
 
@@ -205,6 +245,8 @@ Further findings:
 - Single-item margins of dictionary swaps are reproducible to about 0.1. Shares are reproducible to about 0.003. A patched tensor is rounded to bf16. A 1e-6 relative difference between implementations flips some rounded elements.
 - We registered a pass rule for the mixer-to-MLP link. The rule requires at least 0.75 of the whole share inside the frame, at most 0.25 of it and at most 0.05 in the rest, and at most 0.01 in random frames, in both count cells. Our verdict was that the rule holds for the route through the six transforms and holds only in part for the route through 410 and 1749 alone, because we recorded a share of 0.051 for the rest in `count:100` through those two transforms.
 
+</details>
+
 ## Repository layout
 
 - `src/statescope/reader.py` contains the reader.
@@ -214,8 +256,6 @@ Further findings:
 - `release/qwen35-08b-v2/` holds a manifest copy, the model card and generated tables.
 - `tests/` holds the tests and `tests/EQUIVALENCE_RULES.md`, which records comparison rules.
 - `devtools/` holds tools that stage and measure the published set, and a tool that compares two runs of the demonstration.
-
-Training code will follow.
 
 An earlier, unpublished design's code and tests are on the branch `earlier-design`; it did not train these weights.
 
@@ -239,6 +279,9 @@ The pass/fail rules were written down before the comparisons were run and are in
 
 ## Verification
 
+<details>
+<summary>Reader agreement, weight checks and reproduction across library versions</summary>
+
 **Readers**
 
 - For the 0.8B set, the state reader was compared with the reference reader at 24 layers on 4 splits of 4,096 tokens at 2 sites. Of 786,432 tokens, 4 selected a different group set; raw reconstructions elsewhere agreed within 7.1e-7 relative.
@@ -259,6 +302,8 @@ The pass/fail rules were written down before the comparisons were run and are in
 - A fresh clone, a new environment and a fresh download reproduce the demonstration byte for byte with torch 2.11.0+cu128 and transformers 5.20.2.
 - With newer library versions, torch 2.15.0+cu132 and transformers 5.23.0, shares differ by at most 0.011.
 - The 4B usage lines were run once on the 4B model.
+
+</details>
 
 ## Related work
 
